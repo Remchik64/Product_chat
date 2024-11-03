@@ -1,0 +1,12 @@
+    streamlit==1.32.1
+    langchain-community==0.0.28
+    langchain==0.0.28  # Добавлено для совместимости
+    tinydb==4.7.0
+    requests==2.28.1
+    streamlit-extras
+    deep_translator
+    streamlit-float
+    streamlit-chat
+    Pillow==10.4.0
+    st-pages
+    googletrans==4.0.0-rc1  # Добавьте эту строку

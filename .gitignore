@@ -1,0 +1,20 @@
+# Access keys and sensitive data
+chat/access_keys.json
+chat/access_keys.txt
+*.json
+!package.json
+!package-lock.json
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment variables
+.env
+.env.local
+
+# Database
+*.db
+user_database.json
+chat_history.json

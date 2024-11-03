@@ -1,0 +1,22 @@
+[browser]
+showSidebarNavigation = false
+
+[theme]
+base="dark"
+secondaryBackgroundColor="#32333f"
+textColor="#fffcfc"
+font="monospace"
+
+[ui]
+hideTopBar = true
+
+[server]
+enableCORS = false
+enableXsrfProtection = true
+maxUploadSize = 5
+
+[runner]
+fastReruns = true
+
+[client]
+toolbarMode = "minimal"
