@@ -116,7 +116,7 @@ if st.session_state.show_registration_form:
                     st.success(message)
                     st.session_state.username = reg_username
                     st.session_state.authenticated = True
-                    switch_page("app")
+                    safe_switch_page("Главная")
                 else:
                     st.error(message)
 
@@ -136,3 +136,10 @@ st.markdown(
 # Убедитесь, что пользователь аутентифицирован
 if "authenticated" in st.session_state and st.session_state.authenticated:
     switch_page("Главная")  # Используем display name вместо file name
+
+def safe_switch_page(page_name):
+    try:
+        switch_page(page_name)
+    except ValueError as e:
+        st.error(f"Ошибка при переключении на страницу: {page_name}")
+        st.error(str(e))
