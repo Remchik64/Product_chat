@@ -15,14 +15,14 @@ def generate_unique_token():
 
 # Функция для сохранения токена в файл
 def save_token(token):
-    keys_file = os.path.join(os.path.dirname(__file__), '..', 'chat', 'access_keys.json')
-    txt_file = os.path.join(os.path.dirname(__file__), '..', 'chat', 'access_keys.txt')
+    chat_dir = os.path.join(os.path.dirname(__file__), '..', 'chat')
+    os.makedirs(chat_dir, exist_ok=True)
     
-    # Создаем директорию chat, если она не существует
-    os.makedirs(os.path.dirname(keys_file), exist_ok=True)
+    keys_file = os.path.join(chat_dir, 'access_keys.json')
+    txt_file = os.path.join(chat_dir, 'access_keys.txt')
     
-    # Сохранение в JSON файл
     try:
+        # Загружаем существующие токены или создаем новый список
         if os.path.exists(keys_file):
             with open(keys_file, 'r') as f:
                 try:
@@ -32,12 +32,14 @@ def save_token(token):
         else:
             data = {"keys": []}
         
-        data["keys"].append(token)  # Убираем дополнительные кавычки
+        # Добавляем новый токен
+        data["keys"].append(token)
         
+        # Сохраняем обновленные данные
         with open(keys_file, 'w') as f:
             json.dump(data, f, indent=4)
         
-        # Сохранение в TXT файл
+        # Сохраняем также в txt файл
         with open(txt_file, 'a') as f:
             f.write(f"{token}\n")
             
@@ -51,7 +53,12 @@ def generate_and_save_token():
     return new_token
 
 def load_access_keys():
-    keys_file = os.path.join(os.path.dirname(__file__), '..', 'chat', 'access_keys.json')
+    # Создаем директорию chat, если она не существует
+    chat_dir = os.path.join(os.path.dirname(__file__), '..', 'chat')
+    os.makedirs(chat_dir, exist_ok=True)
+    
+    keys_file = os.path.join(chat_dir, 'access_keys.json')
+    
     try:
         if os.path.exists(keys_file):
             with open(keys_file, 'r') as f:
@@ -59,13 +66,15 @@ def load_access_keys():
                 return [key.strip('"') for key in data.get("keys", [])]
         else:
             # Если файл не существует, создаем его с пустым списком ключей
+            data = {"keys": []}
             with open(keys_file, 'w') as f:
-                json.dump({"keys": []}, f)
+                json.dump(data, f)
             return []
-    except json.JSONDecodeError:
-        # Если файл поврежден, пересоздаем его
+    except (json.JSONDecodeError, IOError):
+        # В случае ошибки создаем новый файл
+        data = {"keys": []}
         with open(keys_file, 'w') as f:
-            json.dump({"keys": []}, f)
+            json.dump(data, f)
         return []
 
 def check_token_status(username):
