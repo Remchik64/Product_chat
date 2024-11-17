@@ -18,3 +18,6 @@ __pycache__/
 *.db
 user_database.json
 chat_history.json
+
+# Streamlit
+.streamlit/secrets.toml

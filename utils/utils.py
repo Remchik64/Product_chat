@@ -6,6 +6,21 @@ from streamlit.runtime.scriptrunner import add_script_run_ctx
 from streamlit import switch_page
 import streamlit as st
 
+def ensure_directories():
+    """Проверка и создание необходимых директорий"""
+    directories = [
+        'chat',
+        'profile_images',
+        '.streamlit'
+    ]
+    base_dir = os.path.dirname(os.path.dirname(__file__))
+    for directory in directories:
+        dir_path = os.path.join(base_dir, directory)
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
+
+ensure_directories()
+
 user_db = TinyDB('user_database.json')
 User = Query()
 
@@ -14,46 +29,52 @@ def generate_unique_token():
     return str(uuid.uuid4())
 
 # Функция для сохранения токена в файл
-def save_token(token):
+def save_token(token, generations=500):
     chat_dir = os.path.join(os.path.dirname(__file__), '..', 'chat')
     os.makedirs(chat_dir, exist_ok=True)
     
     keys_file = os.path.join(chat_dir, 'access_keys.json')
-    txt_file = os.path.join(chat_dir, 'access_keys.txt')
     
     try:
-        # Загружаем существующие токены или создаем новый список
-        if os.path.exists(keys_file):
-            with open(keys_file, 'r') as f:
-                try:
-                    data = json.load(f)
-                except json.JSONDecodeError:
-                    data = {"keys": []}
+        # Создаем новую структуру данных, если файл не существует
+        if not os.path.exists(keys_file):
+            data = {"keys": [], "generations": {}}
         else:
-            data = {"keys": []}
+            try:
+                with open(keys_file, 'r') as f:
+                    data = json.load(f)
+                    if not isinstance(data, dict):
+                        data = {"keys": [], "generations": {}}
+            except json.JSONDecodeError:
+                data = {"keys": [], "generations": {}}
         
-        # Добавляем новый токен
-        data["keys"].append(token)
+        # Убедимся, что все необходимые ключи существуют
+        if "keys" not in data:
+            data["keys"] = []
+        if "generations" not in data:
+            data["generations"] = {}
         
-        # Сохраняем обновленные данные
+        # Добавляем токен без кавычек
+        token = token.strip('"')
+        if token not in data["keys"]:
+            data["keys"].append(token)
+        data["generations"][token] = generations
+        
+        # Сохраняем с отступами для читаемости
         with open(keys_file, 'w') as f:
             json.dump(data, f, indent=4)
-        
-        # Сохраняем также в txt файл
-        with open(txt_file, 'a') as f:
-            f.write(f"{token}\n")
             
     except Exception as e:
-        raise Exception(f"Ошибка при сохранении токена: {str(e)}")
+        print(f"Error saving token: {str(e)}")
+        raise e  # Выбрасываем ошибку для отладки
 
 # Функция для генерации и сохранения нового токена
-def generate_and_save_token():
+def generate_and_save_token(generations=500):
     new_token = generate_unique_token()
-    save_token(new_token)
+    save_token(new_token, generations)
     return new_token
 
 def load_access_keys():
-    # Создаем директорию chat, если она не существует
     chat_dir = os.path.join(os.path.dirname(__file__), '..', 'chat')
     os.makedirs(chat_dir, exist_ok=True)
     
@@ -63,18 +84,11 @@ def load_access_keys():
         if os.path.exists(keys_file):
             with open(keys_file, 'r') as f:
                 data = json.load(f)
-                return [key.strip('"') for key in data.get("keys", [])]
-        else:
-            # Если файл не существует, создаем его с пустым списком ключей
-            data = {"keys": []}
-            with open(keys_file, 'w') as f:
-                json.dump(data, f)
-            return []
-    except (json.JSONDecodeError, IOError):
-        # В случае ошибки создаем новый файл
-        data = {"keys": []}
-        with open(keys_file, 'w') as f:
-            json.dump(data, f)
+                if isinstance(data, dict) and "keys" in data:
+                    return data["keys"]
+        return []
+    except Exception as e:
+        print(f"Error loading keys: {str(e)}")
         return []
 
 def check_token_status(username):
@@ -150,7 +164,7 @@ def remove_used_key(used_key):
 def verify_user_access():
     if "username" not in st.session_state:
         st.warning("Необходима авторизация")
-        switch_page("Вход/Регистрация")
+        switch_page("registr")
         return False
         
     user = user_db.get(User.username == st.session_state.username)
@@ -160,3 +174,16 @@ def verify_user_access():
         return False
         
     return True
+
+def format_database():
+    try:
+        # Читаем текущую базу данных
+        with open('user_database.json', 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        # Записываем с отступами для читаемости
+        with open('user_database.json', 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=4, ensure_ascii=False)
+            
+    except Exception as e:
+        print(f"Ошибка форматирования базы данных: {str(e)}")

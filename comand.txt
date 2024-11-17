@@ -1,1 +1,0 @@
-streamlit run generate_tokens.py    

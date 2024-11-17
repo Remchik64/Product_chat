@@ -3,7 +3,8 @@ from streamlit_extras.switch_page_button import switch_page
 from tinydb import TinyDB, Query
 import os
 from PIL import Image
-from utils.page_config import setup_pages
+from utils.page_config import setup_pages, PAGE_CONFIG
+from utils.utils import format_database
 
 # Настраиваем страницы
 setup_pages()
@@ -30,16 +31,25 @@ def register_user(username, email, password, profile_image_path=None):
         'email': email,
         'password': password,
         'profile_image': profile_image_path if profile_image_path else "profile_images/default_user_icon.png",
-        'remaining_generations': 0  # Инициализируем количество генераций
+        'remaining_generations': 0,
+        'is_admin': False  # По умолчанию пользователь не админ
     }
     user_db.insert(user_data)
+    format_database()  # Добавляем форматирование
     return True, "Регистрация успешна"
 
 # Функция для входа в систему
 def login(username, password):
     User = Query()
-    user = user_db.search((User.username == username) & (User.password == password))
-    return bool(user)
+    user = user_db.get((User.username == username) & (User.password == password))
+    if user:
+        st.session_state.authenticated = True
+        st.session_state.username = username
+        st.session_state.is_admin = user.get('is_admin', False)
+        # Обновляем страницы после установки authenticated
+        setup_pages()
+        return True
+    return False
 
 # Заголовок
 st.title("Вход в систему")
@@ -55,7 +65,9 @@ if st.button("Login"):
             st.session_state.authenticated = True
             st.session_state.username = username
             st.success("Вход выполнен успешно!")
-            switch_page("Ввод токена")  # Используем display name вместо file name
+            # Обновляем страницы перед переключением
+            setup_pages()
+            switch_page(PAGE_CONFIG["key_input"]["name"])
         else:
             st.error("Неправильный логин или пароль.")
     else:
@@ -77,7 +89,7 @@ if st.session_state.show_registration_form:
         reg_password = st.text_input("Пароль", type="password")
         reg_confirm_password = st.text_input("Подтвердите пароль", type="password")
         
-        # Добавляем загрузчик файла для фотографии профиля
+        # Добавлям загрузчик файла для фотографии профиля
         reg_profile_image = st.file_uploader("Загрузите фотографию профиля", type=["png", "jpg", "jpeg"])
         
         if reg_profile_image is not None:
@@ -116,7 +128,8 @@ if st.session_state.show_registration_form:
                     st.success(message)
                     st.session_state.username = reg_username
                     st.session_state.authenticated = True
-                    switch_page("Главная")  # Изменено с "app" на "Главная"
+                    setup_pages() 
+                    switch_page(PAGE_CONFIG["key_input"]["name"])  # Изменено с "app" на "Главная"
                 else:
                     st.error(message)
 
@@ -135,4 +148,4 @@ st.markdown(
 
 # Убедитесь, что пользователь аутентифицирован
 if "authenticated" in st.session_state and st.session_state.authenticated:
-    switch_page("Главная")  # Используем display name вместо file name
+    switch_page(PAGE_CONFIG["key_input"]["name"])

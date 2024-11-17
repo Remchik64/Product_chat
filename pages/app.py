@@ -10,15 +10,30 @@ from tinydb import TinyDB, Query
 User = Query()  # Добавьте эту строку после импорта Query
 from utils.utils import update_remaining_generations
 from utils.chat_database import ChatDatabase
-from utils.page_config import setup_pages
+from utils.page_config import PAGE_CONFIG, setup_pages
+from flowise import Flowise
+from typing import List
 
 # Настраиваем страницы
 setup_pages()
 
+# Добавьте эту конфигурацию сразу после импортов
+st.set_page_config(
+    page_title="Бизнес-Идея",
+    page_icon="💡",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
 # Инициализация session state
 if 'username' not in st.session_state:
     st.warning("Пожалуйста, войдите в систему")
-    switch_page("Вход/Регистрация")  # Используем display name
+    # Сначала устанавливаем состояние аутентификации в False
+    st.session_state.authenticated = False
+    # Затем обновляем страницы
+    setup_pages()
+    # И только потом переключаем страницу
+    switch_page("Вход/Регистрация")
     st.stop()
 
 # Проверяем наличие активного токена и доступа
@@ -36,10 +51,12 @@ if user_data:
     # Проверяем токен и статус доступа
     if not st.session_state.active_token:
         st.warning("Пожалуйста, введите ключ доступа")
-        switch_page("Ввод токена")  # Используем display name
+        switch_page("Ввод/Покупка токена")
 else:
     st.error("Пользователь не найден")
-    switch_page("Вход/Регистрация")  # Используем display name
+    st.session_state.authenticated = False
+    setup_pages()
+    switch_page("Вход/Регистрация")
 
 # Инициализируем базы данных
 chat_db = ChatDatabase(st.session_state.username)
@@ -48,7 +65,7 @@ chat_db = ChatDatabase(st.session_state.username)
 PROFILE_IMAGES_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'profile_images'))
 ASSISTANT_ICON_PATH = os.path.join(PROFILE_IMAGES_DIR, 'assistant_icon.png')  # Путь к иконке ассистента
 
-# Проверем существование файла иконки ассистента
+# Проверем существование фал иконки ассстента
 if os.path.exists(ASSISTANT_ICON_PATH):
     try:
         assistant_avatar = Image.open(ASSISTANT_ICON_PATH)
@@ -89,81 +106,88 @@ def submit_question():
     # Проверяем количество оставшихся генераций
     if st.session_state.remaining_generations <= 0:
         st.error("У вас закончились генерации. Пожалуйста, активируйте новый токен.")
-        switch_page("Ввод токена")
+        switch_page("Вход/Регистрация")
         return
         
-    try:
-        payload = {"question": user_input}
-        response = requests.post('https://flowise-renataraev64.amvera.io/api/v1/prediction/4a4a3f5c-9ebf-4243-8d4f-b3b69dd57313', json=payload)
-        output = response.json()
-        
-        response_text = output.get('text', '')
-        if not response_text:
-            st.warning("Получен пустой ответ от API.")
-            return
-
-        translated_text = translate_text(response_text)
-        if not translated_text:
-            st.warning("Ошибка при переводе ответа.")
-            return
-
-        # Обновляем количество генераций в базе данных и session state
-        st.session_state.remaining_generations -= 1
-        user_db.update({
-            'remaining_generations': st.session_state.remaining_generations,
-            'token_generations': st.session_state.remaining_generations
-        }, User.username == st.session_state.username)
-        
-        if st.session_state.remaining_generations <= 0:
-            user_db.update({
-                'active_token': None,
-                'remaining_generations': 0,
-                'token_generations': 0
-            }, User.username == st.session_state.username)
-            st.warning("Это была последняя доступная генерация. Токен деактивирован.")
+    # Добавляем индикатор загрузки
+    with st.spinner('Отправляем ваш запрос...'):
+        try:
+            payload = {
+                "question": user_input
+            }
+            response = requests.post(
+                st.secrets["flowise"]["api_url"],
+                json=payload,
+                timeout=30  # Добавляем таймаут
+            )
             
-        # Обновляем отображение
-        display_remaining_generations()
-        
-        # Проверка дубликатов
-        user_hash = get_message_hash("user", user_input)
-        assistant_hash = get_message_hash("assistant", translated_text)
+            # Проверяем статус ответа
+            if response.status_code != 200:
+                st.error(f"Ошибка API: {response.status_code}")
+                return
+                
+            output = response.json()
+            response_text = output.get('text', '')
+            
+            if not response_text:
+                st.warning("Получен пустой ответ от API.")
+                return
 
-        if "message_hashes" not in st.session_state:
-            st.session_state.message_hashes = set()
+            translated_text = translate_text(response_text)
+            if not translated_text:
+                st.warning("Ошибка при переводе ответа.")
+                return
 
-        # Добавляем сообщение пользователя
-        if user_hash not in st.session_state.message_hashes:
-            st.session_state.message_hashes.add(user_hash)
-            user_avatar = get_user_profile_image(st.session_state.username)
-            with st.chat_message("user", avatar=user_avatar):
-                st.write(user_input)
-            chat_db.add_message("user", user_input)
+            # Обновляем количество генераций
+            st.session_state.remaining_generations -= 1
+            user_db.update({
+                'remaining_generations': st.session_state.remaining_generations,
+                'token_generations': st.session_state.remaining_generations
+            }, User.username == st.session_state.username)
+            
+            # Добавляем сообщения в чат
+            user_hash = get_message_hash("user", user_input)
+            assistant_hash = get_message_hash("assistant", translated_text)
 
-        # Добавляем сообщение ассистента (только один раз)
-        if assistant_hash not in st.session_state.message_hashes:
-            st.session_state.message_hashes.add(assistant_hash)
-            with st.chat_message("assistant", avatar=assistant_avatar):
-                st.write(translated_text)
-            chat_db.add_message("assistant", translated_text)
-    except Exception as e:
-        st.error(f"Ошибка при обработке запроса: {str(e)}")
-        return
+            if "message_hashes" not in st.session_state:
+                st.session_state.message_hashes = set()
+
+            # Добавляем сообщения и обновляем интерфейс
+            if user_hash not in st.session_state.message_hashes:
+                st.session_state.message_hashes.add(user_hash)
+                user_avatar = get_user_profile_image(st.session_state.username)
+                with st.chat_message("user", avatar=user_avatar):
+                    st.write(user_input)
+                chat_db.add_message("user", user_input)
+
+            if assistant_hash not in st.session_state.message_hashes:
+                st.session_state.message_hashes.add(assistant_hash)
+                with st.chat_message("assistant", avatar=assistant_avatar):
+                    st.write(translated_text)
+                chat_db.add_message("assistant", translated_text)
+
+            # Очищаем поле ввода
+            st.session_state.user_input = ""
+            
+        except requests.exceptions.Timeout:
+            st.error("Превышено время ожидания ответа от сервера")
+        except Exception as e:
+            st.error(f"Ошибка при обработке запроса: {str(e)}")
 
 def translate_text(text):
     try:
         translator = Translator()
         # Проверяем входной текст
         if text is None or not isinstance(text, str) or text.strip() == '':
-            return "Получен пустой или некорректный ответ от API"
+            return "Получен п отет от API"
             
         translation = translator.translate(text, dest='ru')
         if translation and hasattr(translation, 'text') and translation.text:
             return translation.text
-        return "Ошибка пе��евода: некорректный ответ от переводчика"
+        return "Ошиба пеевода: некорректный ответ от переводчика"
         
     except Exception as e:
-        st.error(f"Ошибка при переводе: {str(e)}")
+        st.error(f"Ошибка при перевод: {str(e)}")
         # овращаем оригинальный текст в случае ошибки
         return f"Оригинальный текст: {text}"
 
@@ -187,47 +211,13 @@ def verify_user_access():
         
     if not user_data[0].get('active_token'):
         st.warning("Пожалуйста, введите ключ доступа")
-        switch_page("Ввод токена")
+        switch_page("Вход/Регистрация")
         return False
         
     return True
 
-st.title("Бизнес-Идея")
-
-# Отображаем количество генераций в начале
-display_remaining_generations()
-
-# Добавляем кнопку очистки чата
-if st.sidebar.button("Очистить чат"):
-    clear_chat_history()
-    st.rerun()  # Обновляем страницу для отображения изменений
-
-# Отображение истории сообщений
-chat_history = chat_db.get_history()
-for idx, msg in enumerate(chat_history):
-    if msg["role"] == "user":
-        avatar = get_user_profile_image(st.session_state.username)
-    else:
-        avatar = assistant_avatar
-    with st.chat_message(msg["role"], avatar=avatar):
-        st.write(msg["content"])
-
-# Поле вода с формой
-with st.form(key='question_form'):
-    st.text_input("Введите ваш вопрос", key="user_input")
-    submit_button = st.form_submit_button("Отправить")
-
-if submit_button:
-    submit_question()
-
-st.write(f"Streamlit version: {st.__version__}")
-
-# Внедрение ат-бота
 chat_bot_html = """
-<div id="chatbot-container" style="position: fixed; bottom: 20px; right: 20px; z-index: 1000;">
-    <div id="flowise-container"></div>
-</div>
-
+<div style="height: 600px; width: 100%;">
 <script type="module">
     import Chatbot from "https://cdn.jsdelivr.net/npm/flowise-embed/dist/web.js"
     Chatbot.init({
@@ -238,52 +228,130 @@ chat_bot_html = """
         },
         theme: {
             button: {
-                backgroundColor: "#3B81F6",
+                backgroundColor: "#000000",
                 right: 20,
                 bottom: 20,
-                size: 52,
+                size: 48, // small | medium | large | number
                 dragAndDrop: true,
                 iconColor: "white",
                 customIconSrc: "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/svg/google-messages.svg",
+                autoWindowOpen: {
+                    autoOpen: true,      // Автоматически открывать окно чата
+                    openDelay: 0,        // Задержка открытия в секундах (0 - без задержки)
+                    autoOpenOnMobile: true, // Автоматически открывать на мобильных устройствах
+                },
             },
             tooltip: {
                 showTooltip: true,
-                tooltipMessage: 'Поддержка',
-                tooltipBackgroundColor: 'red',
+                tooltipMessage: 'Привет!',
+                tooltipBackgroundColor: 'black',
                 tooltipTextColor: 'white',
-                tooltipFontSize: 18,
+                tooltipFontSize: 16,
             },
             chatWindow: {
                 showTitle: true,
-                title: 'Вопрос-ответ',
-                titleAvatarSrc: 'https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/svg/google-messages.svg',
+                title: 'Поддержка/Советы',
+                titleAvatarSrc: '',
                 showAgentMessages: true,
-                welcomeMessage: 'Привет, здесь можно задать вопрос по работе приложения',
+                welcomeMessage: 'Привет! Я помогу вам с вопросами.',
                 errorMessage: 'This is a custom error message',
                 backgroundColor: "#ffffff",
-                height: 400,
+                backgroundImage: 'enter image path or link', // If set, this will overlap the background color of the chat window.
+                height: 700,
                 width: 400,
                 fontSize: 16,
-                expandable: true,
-                resizable: true,
-                position: 'bottom',
+                //starterPrompts: ['What is a bot?', 'Who are you?'], // It overrides the starter prompts set by the chat flow passed
+                starterPromptFontSize: 15,
+                clearChatOnReload: false, // If set to true, the chat will be cleared when the page reloads.
+                botMessage: {
+                    backgroundColor: "#f7f8ff",
+                    textColor: "#303235",
+                    showAvatar: false,
+                    showBotName: true,
+                    botName: "Bot",
+                    botNameColor: "#303235"
+                },
+                userMessage: {
+                    backgroundColor: "#000000",
+                    textColor: "#ffffff",
+                    showAvatar: false,
+                    showUserName: true,
+                    userName: "User",
+                    userNameColor: "#ffffff"
+                },
+                textInput: {
+                    placeholder: 'Введите ваш вопрос',
+                    backgroundColor: '#ffffff',
+                    textColor: '#303235',
+                    sendButtonColor: '#000000',
+                    maxChars: 50,
+                    maxCharsWarningMessage: 'You exceeded the characters limit. Please input less than 50 characters.',
+                    autoFocus: true, // If not used, autofocus is disabled on mobile and enabled on desktop. true enables it on both, false disables it on both.
+                    sendMessageSound: true,
+                    // sendSoundLocation: "send_message.mp3", // If this is not used, the default sound effect will be played if sendSoundMessage is true.
+                    receiveMessageSound: true,
+                    // receiveSoundLocation: "receive_message.mp3", // If this is not used, the default sound effect will be played if receiveSoundMessage is true. 
+                },
+                feedback: {
+                    color: '#303235',
+                },
+                footer: {
+                    textColor: '#303235',
+                    text: '',
+                    company: '',
+                    companyLink: '',
+                }
             }
         }
     })
-
-    // Функция для обновления позиции чат-бота
-    function updateChatbotPosition() {
-        const chatbot = document.getElementById('chatbot-container');
-        const scrollY = window.scrollY;
-        
-        // Изменяем позицию чат-бота в зависимости от прокрутки
-        chatbot.style.bottom = (20 + scrollY) + 'px';
-    }
-
-    // Добавляем обработчик события прокрутки
-    window.addEventListener('scroll', updateChatbotPosition);
 </script>
+</div>
 """
 
-# Вставляем HTML и JavaScript в приложение
-components.html(chat_bot_html, height=480)
+def main():
+    st.title("Бизнес-Идея")
+
+    # Отображаем количество генераций в начале
+    display_remaining_generations()
+
+    # Добавляем кнопк очистки чата
+    if st.sidebar.button("Очистить чат"):
+        clear_chat_history()
+        st.rerun()
+
+    # Добавляем разделитель в боковом меню
+    st.sidebar.markdown("---")
+    
+    # Перемещаем чат-бот в конец бокового меню
+    st.sidebar.markdown("### Чат поддержки ")
+    with st.sidebar:
+        components.html(
+            chat_bot_html,
+            height=600,
+            width=None,
+            scrolling=False
+        )
+
+    # Отображение истории сообщений в основной части
+    chat_history = chat_db.get_history()
+    for idx, msg in enumerate(chat_history):
+        if msg["role"] == "user":
+            avatar = get_user_profile_image(st.session_state.username)
+        else:
+            avatar = assistant_avatar
+        with st.chat_message(msg["role"], avatar=avatar):
+            st.write(msg["content"])
+
+    # Поле ввода с формой в основной части
+    with st.form(key='question_form', clear_on_submit=True):
+        st.text_input("Введите ваш вопрос", key="user_input")
+        submit_button = st.form_submit_button("Отправить")
+
+    if submit_button:
+        submit_question()
+        st.rerun()
+
+    st.write(f"Streamlit version: {st.__version__}")
+
+if __name__ == "__main__":
+    main()

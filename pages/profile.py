@@ -3,39 +3,48 @@ from streamlit_extras.switch_page_button import switch_page
 from tinydb import TinyDB, Query
 import os
 from PIL import Image
-from utils.utils import check_token_status
-from utils.page_config import setup_pages
+from utils.utils import check_token_status, format_database
+from utils.page_config import setup_pages, PAGE_CONFIG
+import magic  # Добавьте в начало файла
+import hashlib
+from PIL import Image
+import io
 
 # Настраиваем страницы
 setup_pages()
 
-# Настройка названий страниц в боковом меню
+# Конфигурация страницы должна быть в начале
+st.set_page_config(page_title="Личный кабинет", layout="wide")
 
 # Проверка аутентификации
 if "authenticated" not in st.session_state or not st.session_state.authenticated:
-    st.error("Пожалуйста, войдите в систему.")
-    switch_page("Вход/Регистрация")
-
-st.set_page_config(page_title="Личный кабинет", layout="wide")
+    st.error("Пожалуйста, войдите в систему")
+    switch_page(PAGE_CONFIG["registr"]["name"])
+    st.stop()
 
 # Инициализация базы данных пользователей
 user_db = TinyDB('user_database.json')
 
 # Папка с изображениями профиля
-PROFILE_IMAGES_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'profile_images'))
+PROFILE_IMAGES_DIR = 'profile_images'  # Используем относительный путь
+if not os.path.exists(PROFILE_IMAGES_DIR):
+    os.makedirs(PROFILE_IMAGES_DIR)
 
 # Получение данных пользователя
 User = Query()
 user_data = user_db.search(User.username == st.session_state.username)
 if not user_data:
     st.error("Пользователь не найден.")
-    switch_page("registr")
-else:
-    user_data = user_data[0]
-    # Синхронизируем session state с данными из базы
-    if user_data.get('active_token'):
-        st.session_state.active_token = user_data['active_token']
-        st.session_state.remaining_generations = user_data.get('token_generations', 0)
+    st.session_state.authenticated = False
+    st.session_state.username = None
+    switch_page("вход/регистрация")
+    st.stop()
+
+user_data = user_data[0]
+# Синхронизируем session state с данными из базы
+if user_data.get('active_token'):
+    st.session_state.active_token = user_data['active_token']
+    st.session_state.remaining_generations = user_data.get('remaining_generations', 0)
 
 st.title(f"Личный кабинет {user_data['username']}")
 
@@ -47,7 +56,7 @@ st.write(f"Email: {user_data['email']}")
 st.subheader("Фотография профиля")
 if user_data.get('profile_image') and os.path.exists(user_data['profile_image']):
     st.image(user_data['profile_image'], width=150)
-    # Добавляем кнопку для удаления аватара
+    # Добавляем кнопку для уаления аватара
     if st.button("Удалить фотографию профиля"):
         old_image_path = user_data.get('profile_image')
         if old_image_path and old_image_path != os.path.join(PROFILE_IMAGES_DIR, "default_user_icon.png"):
@@ -66,31 +75,17 @@ else:
 
 # Отображение токена и количества генераций
 if user_data.get('active_token'):
-    st.subheader("Ваш активный токен")
-    token_col1, token_col2 = st.columns([3, 1])
-    with token_col1:
-        st.code(user_data['active_token'])
-    with token_col2:
-        if st.button("Копировать токен"):
-            st.write("Токен скопирован в буфер обмена")
-            st.session_state['clipboard'] = user_data['active_token']
+    st.subheader("Доступные генерации")
+    remaining_generations = user_data.get('remaining_generations', 0)
     
-    token_status, message = check_token_status(st.session_state.username)
-    if token_status:
-        st.success(f"Токен активен. Осталось генераций: {user_data.get('remaining_generations', 0)}")
+    if remaining_generations > 0:
+        st.success(f"Осталось генераций: {remaining_generations}")
     else:
-        st.warning(message)
+        st.warning("Генерации закончились. Пожалуйста, активируйте новый токен.")
 else:
-    # Проверяем наличие токена в session_state и сохраняем его в базу
-    if 'active_token' in st.session_state:
-        user_db.update(
-            {
-                'active_token': st.session_state.active_token,
-                'token_generations': st.session_state.get('remaining_generations', 500)
-            },
-            User.username == st.session_state.username
-        )
-        st.rerun()  # Перезагружаем страницу для отображения обновленных данных
+    st.warning("У вас нет активного токена. Для использования сервиса необходимо активировать токен.")
+    if st.button("Активировать токен"):
+        switch_page(PAGE_CONFIG["key_input"]["name"])
 
 # Зона для оновления данных
 st.header("Обновление данных")
@@ -101,62 +96,130 @@ confirm_password = st.text_input("Подтвердите новый пароль
 # Загрузка новой фотографии профиля
 new_profile_image = st.file_uploader("Обновите фотографию профиля", type=["png", "jpg", "jpeg"])
 
-MAX_FILE_SIZE = 2 * 1024 * 1024  # 2MB
+# Инициализируем словарь для обновлений
+updates = {}
+needs_reload = False
+
+def validate_image(file_content):
+    """Проверка безопасности изображения"""
+    try:
+        # Проверка MIME-типа
+        mime = magic.Magic(mime=True)
+        file_mime = mime.from_buffer(file_content)
+        allowed_mimes = ['image/jpeg', 'image/png', 'image/jpg']
+        if file_mime not in allowed_mimes:
+            return False, "Недопустимый тип файла"
+        
+        # Проверка через PIL
+        img = Image.open(io.BytesIO(file_content))
+        img.verify()
+        
+        # Проверка размера
+        if len(file_content) > 2 * 1024 * 1024:  # 2MB
+            return False, "Файл слишком большой"
+        
+        # Вычисление хеша файла
+        file_hash = hashlib.sha256(file_content).hexdigest()
+        
+        return True, file_hash
+    except Exception as e:
+        return False, f"Ошибка проверки изображения: {str(e)}"
+
+def sanitize_filename(filename):
+    """Очистка имени файла"""
+    return "".join(c for c in filename if c.isalnum() or c in ('-', '_', '.'))
 
 if new_profile_image is not None:
-    if new_profile_image.size > MAX_FILE_SIZE:
-        st.error("Размер файла превышает 2MB.")
-        st.stop()
-
     try:
-        img = Image.open(new_profile_image)
-        img.verify()
-    except (IOError, SyntaxError) as e:
-        st.error("Файл не является допустимым изображением.")
+        # Читаем содержимое файла как байты
+        file_content = new_profile_image.getvalue()
+        
+        # Проверяем безопасность изображения
+        is_safe, result = validate_image(file_content)
+        if not is_safe:
+            st.error(result)
+            st.stop()
+            
+        # Генерируем безопасное имя файла
+        file_extension = os.path.splitext(new_profile_image.name)[1].lower()
+        safe_filename = sanitize_filename(f"{user_data['username']}{file_extension}")
+        image_path = os.path.join(PROFILE_IMAGES_DIR, safe_filename)
+        
+        # Конвертируем и сохраняем изображение через PIL
+        img = Image.open(io.BytesIO(file_content))
+        img = img.convert('RGB')  # Конвертируем в RGB для удаления метаданных
+        
+        # Сохраняем с оптимизацией
+        img.save(
+            image_path,
+            format='JPEG' if file_extension.lower() == '.jpg' else 'PNG',
+            optimize=True,
+            quality=85
+        )
+        
+        updates['profile_image'] = image_path
+        needs_reload = True
+        
+    except Exception as e:
+        st.error(f"Ошибка при обработке изображения: {e}")
         st.stop()
-
-    st.image(new_profile_image, width=150)
 
 if st.button("Обновить данные"):
-    updates = {}
+    # Собираем все обновления
     if new_email and new_email != user_data['email']:
         updates['email'] = new_email
+        needs_reload = True
 
     if new_password:
         if new_password != confirm_password:
             st.error("Пароли не совпадают")
-            st.stop()
         else:
             updates['password'] = new_password
+            needs_reload = True
 
     if new_profile_image is not None:
-        # Сохранение новой фотографии профиля
-        image_filename = f"{user_data['username']}.png"
-        image_path = os.path.join(PROFILE_IMAGES_DIR, image_filename)
         try:
+            # Проверяем и создаем директорию, если она не существует
+            if not os.path.exists(PROFILE_IMAGES_DIR):
+                os.makedirs(PROFILE_IMAGES_DIR)
+            
+            # Генерируем имя файла с расширением оригинального файла
+            file_extension = os.path.splitext(new_profile_image.name)[1].lower()
+            image_filename = f"{user_data['username']}{file_extension}"
+            image_path = os.path.join(PROFILE_IMAGES_DIR, image_filename)
+            
+            # Сохраняем новое изображение
             with open(image_path, "wb") as f:
                 f.write(new_profile_image.getbuffer())
-            updates['profile_image'] = image_path
-            st.success("Новое изображение профиля успешно сохранено.")
+            
+            # Проверяем, что файл успешно сохранен
+            if os.path.exists(image_path):
+                # Удаляем старое изображение
+                old_image_path = user_data.get('profile_image')
+                if old_image_path and old_image_path != os.path.join(PROFILE_IMAGES_DIR, "default_user_icon.png"):
+                    if os.path.exists(old_image_path):
+                        try:
+                            os.remove(old_image_path)
+                        except Exception as e:
+                            st.warning(f"Не удалось удалить старое изображение: {e}")
+                
+                updates['profile_image'] = image_path
+                needs_reload = True
+            else:
+                st.error("Ошибка при сохранении изображения")
+                
         except Exception as e:
-            st.error(f"Ошибка при сохранении файла: {e}")
+            st.error(f"Ошибка при обработке изображения: {e}")
             st.stop()
 
-        # Удаление старого изображения (если оно не является стандартным)
-        old_image_path = user_data.get('profile_image')
-        if old_image_path and old_image_path != os.path.join(PROFILE_IMAGES_DIR, "default_user_icon.png"):
-            if os.path.exists(old_image_path):
-                try:
-                    os.remove(old_image_path)
-                    st.success("Старое изображение успешно удалено.")
-                except Exception as e:
-                    st.error(f"Ошибка при удалении файла: {e}")
-
+    # Применяем все обновления разом
     if updates:
         try:
             user_db.update(updates, User.username == st.session_state.username)
+            format_database()
             st.success("Данные успешно обновлены")
-            st.rerun()  # Перезагружаем страницу для обновления данных
+            if needs_reload:
+                st.rerun()
         except Exception as e:
             st.error(f"Ошибка при обновлении данных: {e}")
     else:
@@ -166,6 +229,7 @@ if st.button("Обновить данные"):
 if st.button("Выйти"):
     st.session_state.authenticated = False
     st.session_state.username = None
-    st.session_state.active_token = None  # Очищаем ткен
-    st.session_state.remaining_generations = 0  # Очищаем количество генераций
-    switch_page("registr")
+    st.session_state.active_token = None
+    st.session_state.remaining_generations = 0
+    setup_pages()  # Обновляем страницы
+    switch_page(PAGE_CONFIG["registr"]["name"])  # Используем имя из конфигурации
