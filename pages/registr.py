@@ -78,6 +78,9 @@ def login(username, password):
 # Заголовок
 st.title("Вход в систему")
 
+# Добавляем предупреждение о сохранении паролей
+#st.warning("Внимание! Пароль не сохраняется в базе данных. Пожалуйста, сохраните его в надежном месте.")
+
 # Форма для входа
 username = st.text_input("Имя пользователя")
 password = st.text_input("Пароль", type="password")
@@ -108,6 +111,9 @@ if "show_registration_form" not in st.session_state:
 
 if st.session_state.show_registration_form:
     with st.form("registration_form"):
+        # Добавляем предупреждение о сохранении паролей в форме регистрации
+        st.warning("Пожалуйста, сохраните свой логин и пароль в надежном месте. Восстановление логина и пароля не предусмотрено.")
+        
         reg_username = st.text_input("Имя пользователя для регистрации")
         reg_email = st.text_input("Email")
         reg_password = st.text_input("Пароль", type="password")
@@ -120,7 +126,7 @@ if st.session_state.show_registration_form:
             st.image(reg_profile_image, width=150)
         
         submit_button = st.form_submit_button("Вход")
-
+        
         if submit_button:
             if not reg_username or not reg_email or not reg_password or not reg_confirm_password:
                 st.error("Пожалуйста, заполните все поля.")
