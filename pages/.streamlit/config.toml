@@ -1,5 +1,5 @@
-[browser]
-showSidebarNavigation = false
+[client]
+showSidebarNavigation = true  # или false, если хотите скрыть боковую панель
 
 [theme]
 base="dark"
@@ -21,4 +21,4 @@ fastReruns = true
 
 [client]
 toolbarMode = "minimal"
-showSidebarNavigation = true
+
