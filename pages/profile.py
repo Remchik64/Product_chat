@@ -37,7 +37,7 @@ if not user_data:
     st.error("Пользователь не найден.")
     st.session_state.authenticated = False
     st.session_state.username = None
-    switch_page("вход/регистрация")
+    switch_page(PAGE_CONFIG["registr"]["name"])
     st.stop()
 
 user_data = user_data[0]
