@@ -1,13 +1,12 @@
 [client]
 showSidebarNavigation = true  # или false, если хотите скрыть боковую панель
-
+toolbarMode = "minimal"
 
 [theme]
 base="dark"
 secondaryBackgroundColor="#32333f"
 textColor="#fffcfc"
 font="monospace"
-
 
 [ui]
 hideTopBar = true
@@ -19,7 +18,4 @@ maxUploadSize = 5
 
 [runner]
 fastReruns = true
-
-[client]
-toolbarMode = "minimal"
 
