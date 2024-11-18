@@ -35,7 +35,7 @@ st.title("Генерация токенов (Админ панель)")
 with st.form("token_generation"):
     num_tokens = st.number_input("Количество токенов", min_value=1, max_value=10, value=1)
     generations = st.number_input("Количество генераций на токен", 
-                                min_value=100, max_value=1000, value=500)
+                                min_value=10, max_value=1000, value=500)
     submit = st.form_submit_button("Сгенерировать")
 
 if submit:
