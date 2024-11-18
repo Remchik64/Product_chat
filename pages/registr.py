@@ -88,11 +88,17 @@ password = st.text_input("Пароль", type="password")
 # Кнопки для входа и регистрации
 if st.button("Login"):
     if username and password:  # Проверка на пустые поля
-        if login(username, password):
+        if username == st.secrets["admin"]["admin_username"] and password == st.secrets["admin"]["admin_password"]:
+            st.session_state.authenticated = True
+            st.session_state.username = username
+            st.session_state.is_admin = True
+            st.success("Вход выполнен успешно!")
+            setup_pages()
+            switch_page(PAGE_CONFIG["key_input"]["name"])
+        elif login(username, password):
             st.session_state.authenticated = True
             st.session_state.username = username
             st.success("Вход выполнен успешно!")
-            # Обновляем страницы перед переключением
             setup_pages()
             switch_page(PAGE_CONFIG["key_input"]["name"])
         else:
