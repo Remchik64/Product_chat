@@ -1,6 +1,4 @@
-[client]
-showSidebarNavigation = true
-toolbarMode = "minimal"
+
 
 [theme]
 base="dark"
