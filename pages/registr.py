@@ -5,6 +5,8 @@ import os
 from PIL import Image
 from utils.page_config import setup_pages, PAGE_CONFIG
 from utils.utils import format_database
+from utils.security import hash_password, is_strong_password, verify_password, check_login_attempts, increment_login_attempts, reset_login_attempts
+from datetime import datetime
 
 # Настраиваем страницы
 setup_pages()
@@ -26,29 +28,51 @@ def register_user(username, email, password, profile_image_path=None):
         return False, "Пользователь с таким именем уже существует"
     if user_db.search(User.email == email):
         return False, "Пользователь с таким email уже существует"
+        
+    # Проверка надежности пароля
+    is_strong, message = is_strong_password(password)
+    if not is_strong:
+        return False, message
+        
+    # Хеширование пароля
+    hashed_password = hash_password(password)
+    
     user_data = {
         'username': username,
         'email': email,
-        'password': password,
+        'password': hashed_password,
         'profile_image': profile_image_path if profile_image_path else "profile_images/default_user_icon.png",
         'remaining_generations': 0,
-        'is_admin': False  # По умолчанию пользователь не админ
+        'is_admin': False,
+        'created_at': datetime.now().isoformat()
     }
     user_db.insert(user_data)
-    format_database()  # Добавляем форматирование
+    format_database()
     return True, "Регистрация успешна"
 
 # Функция для входа в систему
 def login(username, password):
     User = Query()
-    user = user_db.get((User.username == username) & (User.password == password))
-    if user:
+    
+    # Проверка попыток входа
+    can_login, message = check_login_attempts(username)
+    if not can_login:
+        st.error(message)
+        return False
+    
+    user = user_db.get(User.username == username)
+    if user and verify_password(password, user['password']):
         st.session_state.authenticated = True
         st.session_state.username = username
         st.session_state.is_admin = user.get('is_admin', False)
-        # Обновляем страницы после установки authenticated
+        reset_login_attempts(username)
         setup_pages()
         return True
+    
+    # Увеличиваем счетчик неудачных попыток
+    success, message = increment_login_attempts(username)
+    if not success:
+        st.error(message)
     return False
 
 # Заголовок

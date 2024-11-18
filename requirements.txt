@@ -14,3 +14,4 @@
     streamlit-option-menu==0.3.6
     python-magic-bin==0.4.14
     Pillow>=9.0.0
+    passlib==1.7.4
