@@ -12,12 +12,15 @@ if not st.session_state.get("is_admin", False):
     st.error("Доступ запрещен. Страница доступна только администраторам.")
     st.stop()
 
-# Дополнительная проверка пароля администратора
+# Дополнительная проверка имени пользователя и пароля администратора
 if "admin_verified" not in st.session_state:
+    admin_username = st.text_input("Введите имя пользователя администратора")
     admin_password = st.text_input("Введите пароль администратора", type="password")
-    if admin_password != st.secrets["admin"]["admin_password"]:
-        st.error("Неверный пароль администратора")
+    
+    if admin_username != st.secrets["admin"]["admin_username"] or admin_password != st.secrets["admin"]["admin_password"]:
+        st.error("Неверное имя пользователя или пароль администратора")
         st.stop()
+    
     st.session_state.admin_verified = True
 
 # Проверяем и создаем папку chat если её нет
