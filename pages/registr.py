@@ -96,9 +96,11 @@ if st.button("Login"):
             setup_pages()
             switch_page(PAGE_CONFIG["key_input"]["name"])
         elif login(username, password):
-            st.session_state.authenticated = True
+            User = Query()
+            user = user_db.get(User.username == username)
+            st.session_state.authenticated = True 
             st.session_state.username = username
-            st.success("Вход выполнен успешно!")
+            st.session_state.is_admin = user.get('is_admin', False)
             setup_pages()
             switch_page(PAGE_CONFIG["key_input"]["name"])
         else:

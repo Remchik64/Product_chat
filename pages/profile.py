@@ -231,5 +231,6 @@ if st.button("Выйти"):
     st.session_state.username = None
     st.session_state.active_token = None
     st.session_state.remaining_generations = 0
-    setup_pages()  # Обновляем страницы
-    switch_page(PAGE_CONFIG["registr"]["name"])  # Используем имя из конфигурации
+    st.session_state.is_admin = False  # Удаляем статус администратора
+    setup_pages()
+    switch_page(PAGE_CONFIG["registr"]["name"])
