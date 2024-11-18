@@ -1,5 +1,5 @@
 [client]
-showSidebarNavigation = true  # или false, если хотите скрыть боковую панель
+showSidebarNavigation = true  
 toolbarMode = "minimal"
 
 [theme]
