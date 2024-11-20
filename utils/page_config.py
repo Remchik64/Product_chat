@@ -72,10 +72,12 @@ def setup_pages():
                             Page(page_path, name=config["name"], icon=config["icon"])
                         )
         
+        if pages_to_show:  # Добавляем проверку
+            show_pages(pages_to_show)
+            
         # Обновляем session_state только если страницы изменились
         if current_pages != st.session_state.pages:
             st.session_state.pages = current_pages
-            show_pages(pages_to_show)
             
     except Exception as e:
         st.error(f"Ошибка при настройке страниц: {str(e)}")

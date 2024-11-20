@@ -6,7 +6,10 @@ from utils.page_config import PAGE_CONFIG, setup_pages
 import os
 import json
 
-# Настраиваем страницы
+# Сначала конфигурация страницы
+st.set_page_config(...)
+
+# Затем настройка страниц
 setup_pages()
 
 # Инициализация базы данных

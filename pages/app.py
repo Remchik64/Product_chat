@@ -14,10 +14,7 @@ from utils.page_config import PAGE_CONFIG, setup_pages
 from flowise import Flowise
 from typing import List
 
-# Настраиваем страницы
-setup_pages()
-
-# Добавьте эту конфигурацию сразу после импортов
+# Сначала конфигурация страницы
 st.set_page_config(
     page_title="Бизнес-Идея",
     page_icon="💡",
@@ -25,8 +22,8 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-
-
+# Затем настройка страниц
+setup_pages()
 
 # Инициализация session state
 if 'username' not in st.session_state:
@@ -200,7 +197,7 @@ def clear_chat_history():
         del st.session_state["message_hashes"]  # Сброс хэшей сообщений
 
 def verify_user_access():
-    # Проверяем наличие пользователя и активного токена
+    # Проверяем наличие пользователя и активного токен��
     if 'username' not in st.session_state:
         st.warning("Пожалуйста, войдите в систему")
         switch_page("Вход/Регистрация")
@@ -347,7 +344,7 @@ def main():
 
     # Поле ввода с формой в основной части
     with st.form(key='question_form', clear_on_submit=True):
-        st.text_input("Вве��ите ваш вопрос", key="user_input")
+        st.text_input("Ввеите ваш вопрос", key="user_input")
         submit_button = st.form_submit_button("Отправить")
 
     if submit_button:

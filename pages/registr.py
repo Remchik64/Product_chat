@@ -8,10 +8,11 @@ from utils.utils import format_database
 from utils.security import hash_password, is_strong_password, verify_password, check_login_attempts, increment_login_attempts, reset_login_attempts
 from datetime import datetime
 
-# Настраиваем страницы
-setup_pages()
+# Сначала конфигурация страницы
 st.set_page_config(page_title="Вход/Регистрация", layout="wide", initial_sidebar_state="collapsed")
-st.markdown("<style>#MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}</style>", unsafe_allow_html=True)
+
+# Затем настройка страниц
+setup_pages()
 
 # Инициализация базы данных пользователей
 user_db = TinyDB('user_database.json')
@@ -147,7 +148,7 @@ if st.session_state.show_registration_form:
                     if reg_profile_image.size > MAX_FILE_SIZE:
                         st.error("Размер файла превышает 2MB.")
                         st.stop()
-                    # Генерация уникального имени файла
+                    # Генерация уник��льного имени файла
                     image_filename = f"{reg_username}.png"
                     image_path = os.path.join(PROFILE_IMAGES_DIR, image_filename)
                     with open(image_path, "wb") as f:
@@ -171,7 +172,7 @@ if st.session_state.show_registration_form:
                 else:
                     st.error(message)
 
-# Добавление CSS для кнопок
+# Добавление CSS для ��нопок
 st.markdown(
     """
     <style>
