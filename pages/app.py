@@ -347,7 +347,7 @@ def main():
 
     # Поле ввода с формой в основной части
     with st.form(key='question_form', clear_on_submit=True):
-        st.text_input("Вве��ите ваш вопрос", key="user_input")
+        st.text_input("Ввеите ваш вопрос", key="user_input")
         submit_button = st.form_submit_button("Отправить")
 
     if submit_button:
@@ -355,6 +355,13 @@ def main():
         st.rerun()
 
     st.write(f"Streamlit version: {st.__version__}")
+
+def switch_to_page(page_name):
+    if page_name in st.session_state.pages:
+        switch_page(page_name)
+    else:
+        st.error(f"Страница {page_name} не найдена")
+        setup_pages()
 
 if __name__ == "__main__":
     main()
