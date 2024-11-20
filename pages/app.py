@@ -22,30 +22,11 @@ st.set_page_config(
     page_title="Бизнес-Идея",
     page_icon="💡",
     layout="wide",
-    initial_sidebar_state="expanded",
-    menu_items={
-        'Get Help': None,
-        'Report a bug': None,
-        'About': None
-    }
+    initial_sidebar_state="expanded"
 )
 
-# Добавьте этот код после конфигурации страницы
-st.markdown("""
-    <style>
-        [data-testid="collapsedControl"] {
-            display: none
-        }
-        #MainMenu {visibility: hidden;}
-        .css-1rs6os {visibility: hidden;}
-        .css-17ziqus {visibility: hidden;}
-        section[data-testid="stSidebar"] {
-            width: 250px !important;
-            min-width: 250px !important;
-            max-width: 250px !important;
-        }
-    </style>
-""", unsafe_allow_html=True)
+
+
 
 # Инициализация session state
 if 'username' not in st.session_state:
@@ -366,7 +347,7 @@ def main():
 
     # Поле ввода с формой в основной части
     with st.form(key='question_form', clear_on_submit=True):
-        st.text_input("Введите ваш вопрос", key="user_input")
+        st.text_input("Вве��ите ваш вопрос", key="user_input")
         submit_button = st.form_submit_button("Отправить")
 
     if submit_button:
