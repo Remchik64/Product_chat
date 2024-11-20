@@ -164,7 +164,7 @@ if st.button("Обновить данные"):
     # Обработка изменения пароля
     if new_password:
         if new_password != confirm_password:
-            st.error("П��роли не совпадают")
+            st.error("Проли не совпадают")
         else:
             is_strong, message = is_strong_password(new_password)
             if not is_strong:

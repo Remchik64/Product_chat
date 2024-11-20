@@ -25,6 +25,12 @@ st.set_page_config(
 # Затем настройка страниц
 setup_pages()
 
+# Проверка аутентификации
+if "authenticated" not in st.session_state or not st.session_state.authenticated:
+    st.warning("Пожалуйста, войдите в систему")
+    switch_page(PAGE_CONFIG["registr"]["name"])
+    st.stop()
+
 # Инициализация session state
 if 'username' not in st.session_state:
     st.warning("Пожалуйста, войдите в систему")

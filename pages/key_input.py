@@ -7,7 +7,12 @@ import os
 import json
 
 # Сначала конфигурация страницы
-st.set_page_config(...)
+st.set_page_config(
+    page_title="Ввод токена",
+    page_icon="🔑",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 
 # Затем настройка страниц
 setup_pages()
