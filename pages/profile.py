@@ -95,13 +95,61 @@ new_email = st.text_input("Новый email", value=user_data['email'])
 new_password = st.text_input("Новый пароль", type="password")
 confirm_password = st.text_input("Подтвердите новый пароль", type="password")
 
+# Загрузка новой фотографии профиля
+new_profile_image = st.file_uploader("Загрузить новую фотографию профиля", type=["png", "jpg", "jpeg"])
+if new_profile_image is not None:
+    st.image(new_profile_image, width=150)
+    updates = {}
+    needs_reload = False
+
+    try:
+        # Проверяем размер файла
+        MAX_FILE_SIZE = 2 * 1024 * 1024  # 2MB
+        if new_profile_image.size > MAX_FILE_SIZE:
+            st.error("Размер файла превышает 2MB.")
+            st.stop()
+
+        # Генерируем имя файла с расширением оригинального файла
+        file_extension = os.path.splitext(new_profile_image.name)[1].lower()
+        image_filename = f"{user_data['username']}{file_extension}"
+        image_path = os.path.join(PROFILE_IMAGES_DIR, image_filename)
+
+        # Удаляем старое изображение, если оно существует
+        old_image_path = user_data.get('profile_image')
+        if old_image_path and old_image_path != os.path.join(PROFILE_IMAGES_DIR, "default_user_icon.png"):
+            if os.path.exists(old_image_path):
+                try:
+                    os.remove(old_image_path)
+                except Exception as e:
+                    st.warning(f"Не удалось удалить старое изображение: {e}")
+
+        # Сохраняем новое изображение
+        with open(image_path, "wb") as f:
+            f.write(new_profile_image.getbuffer())
+
+        # Проверяем валидность изображения
+        try:
+            img = Image.open(new_profile_image)
+            img.verify()
+            updates['profile_image'] = image_path
+            needs_reload = True
+        except Exception as e:
+            st.error("Файл не является допустимым изображением.")
+            if os.path.exists(image_path):
+                os.remove(image_path)
+            st.stop()
+
+    except Exception as e:
+        st.error(f"Ошибка при обработке изображения: {e}")
+        st.stop()
+
 if st.button("Обновить данные"):
     updates = {}
     needs_reload = False
     old_username = user_data['username']
 
+    # Обработка изменения имени пользователя и email
     if new_username and new_username != old_username:
-        # Проверяем, не занято ли новое имя пользователя
         existing_user = user_db.get(User.username == new_username)
         if existing_user:
             st.error("Пользователь с таким именем уже существует")
@@ -113,6 +161,7 @@ if st.button("Обновить данные"):
         updates['email'] = new_email
         needs_reload = True
 
+    # Обработка изменения пароля
     if new_password:
         if new_password != confirm_password:
             st.error("Пароли не совпадают")
@@ -124,14 +173,50 @@ if st.button("Обновить данные"):
                 updates['password'] = hash_password(new_password)
                 needs_reload = True
 
-    # Применяем обновления
+    # Обработка новой фотографии профиля
+    if new_profile_image is not None:
+        try:
+            # Проверяем размер файла
+            if new_profile_image.size > 2 * 1024 * 1024:  # 2MB
+                st.error("Размер файла превышает 2MB.")
+                st.stop()
+
+            # Генерируем имя файла
+            file_extension = os.path.splitext(new_profile_image.name)[1].lower()
+            image_filename = f"{old_username}{file_extension}"
+            image_path = os.path.join(PROFILE_IMAGES_DIR, image_filename)
+
+            # Удаляем старое изображение
+            old_image_path = user_data.get('profile_image')
+            if old_image_path and old_image_path != os.path.join(PROFILE_IMAGES_DIR, "default_user_icon.png"):
+                if os.path.exists(old_image_path):
+                    try:
+                        os.remove(old_image_path)
+                    except Exception as e:
+                        st.warning(f"Не удалось удалить старое изображение: {e}")
+
+            # Сохраняем новое изображение
+            with open(image_path, "wb") as f:
+                f.write(new_profile_image.getbuffer())
+
+            # Проверяем валидность изображения
+            img = Image.open(new_profile_image)
+            img.verify()
+            updates['profile_image'] = image_path
+            needs_reload = True
+
+        except Exception as e:
+            st.error(f"Ошибка при обработке изображения: {e}")
+            if 'image_path' in locals() and os.path.exists(image_path):
+                os.remove(image_path)
+            st.stop()
+
+    # Применяем все обновления
     if updates:
         try:
-            # Обновляем данные в базе, используя старое имя пользователя для поиска
             user_db.update(updates, User.username == old_username)
             format_database()
             
-            # Обновляем session_state только после успешного обновления базы
             if 'username' in updates:
                 st.session_state.username = updates['username']
             
