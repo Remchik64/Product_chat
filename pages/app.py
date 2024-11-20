@@ -197,7 +197,7 @@ def clear_chat_history():
         del st.session_state["message_hashes"]  # Сброс хэшей сообщений
 
 def verify_user_access():
-    # Проверяем наличие пользователя и активного токен��
+    # Проверяем наличие пользователя и активного токен
     if 'username' not in st.session_state:
         st.warning("Пожалуйста, войдите в систему")
         switch_page("Вход/Регистрация")
