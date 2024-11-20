@@ -9,6 +9,7 @@ import magic  # Добавьте в начало файла
 import hashlib
 from PIL import Image
 import io
+from utils.security import hash_password, is_strong_password
 
 # Настраиваем страницы
 setup_pages()
@@ -87,85 +88,27 @@ else:
     if st.button("Активировать токен"):
         switch_page(PAGE_CONFIG["key_input"]["name"])
 
-# Зона для оновления данных
+# Зона для обновления данных
 st.header("Обновление данных")
+new_username = st.text_input("Новое имя пользователя", value=user_data['username'])
 new_email = st.text_input("Новый email", value=user_data['email'])
 new_password = st.text_input("Новый пароль", type="password")
 confirm_password = st.text_input("Подтвердите новый пароль", type="password")
 
-# Загрузка новой фотографии профиля
-new_profile_image = st.file_uploader("Обновите фотографию профиля", type=["png", "jpg", "jpeg"])
-
-# Инициализируем словарь для обновлений
-updates = {}
-needs_reload = False
-
-def validate_image(file_content):
-    """Проверка безопасности изображения"""
-    try:
-        # Проверка MIME-типа
-        mime = magic.Magic(mime=True)
-        file_mime = mime.from_buffer(file_content)
-        allowed_mimes = ['image/jpeg', 'image/png', 'image/jpg']
-        if file_mime not in allowed_mimes:
-            return False, "Недопустимый тип файла"
-        
-        # Проверка через PIL
-        img = Image.open(io.BytesIO(file_content))
-        img.verify()
-        
-        # Проверка размера
-        if len(file_content) > 2 * 1024 * 1024:  # 2MB
-            return False, "Файл слишком большой"
-        
-        # Вычисление хеша файла
-        file_hash = hashlib.sha256(file_content).hexdigest()
-        
-        return True, file_hash
-    except Exception as e:
-        return False, f"Ошибка проверки изображения: {str(e)}"
-
-def sanitize_filename(filename):
-    """Очистка имени файла"""
-    return "".join(c for c in filename if c.isalnum() or c in ('-', '_', '.'))
-
-if new_profile_image is not None:
-    try:
-        # Читаем содержимое файла как байты
-        file_content = new_profile_image.getvalue()
-        
-        # Проверяем безопасность изображения
-        is_safe, result = validate_image(file_content)
-        if not is_safe:
-            st.error(result)
-            st.stop()
-            
-        # Генерируем безопасное имя файла
-        file_extension = os.path.splitext(new_profile_image.name)[1].lower()
-        safe_filename = sanitize_filename(f"{user_data['username']}{file_extension}")
-        image_path = os.path.join(PROFILE_IMAGES_DIR, safe_filename)
-        
-        # Конвертируем и сохраняем изображение через PIL
-        img = Image.open(io.BytesIO(file_content))
-        img = img.convert('RGB')  # Конвертируем в RGB для удаления метаданных
-        
-        # Сохраняем с оптимизацией
-        img.save(
-            image_path,
-            format='JPEG' if file_extension.lower() == '.jpg' else 'PNG',
-            optimize=True,
-            quality=85
-        )
-        
-        updates['profile_image'] = image_path
-        needs_reload = True
-        
-    except Exception as e:
-        st.error(f"Ошибка при обработке изображения: {e}")
-        st.stop()
-
 if st.button("Обновить данные"):
-    # Собираем все обновления
+    updates = {}
+    needs_reload = False
+    old_username = user_data['username']
+
+    if new_username and new_username != old_username:
+        # Проверяем, не занято ли новое имя пользователя
+        existing_user = user_db.get(User.username == new_username)
+        if existing_user:
+            st.error("Пользователь с таким именем уже существует")
+        else:
+            updates['username'] = new_username
+            needs_reload = True
+
     if new_email and new_email != user_data['email']:
         updates['email'] = new_email
         needs_reload = True
@@ -174,56 +117,31 @@ if st.button("Обновить данные"):
         if new_password != confirm_password:
             st.error("Пароли не совпадают")
         else:
-            updates['password'] = new_password
-            needs_reload = True
-
-    if new_profile_image is not None:
-        try:
-            # Проверяем и создаем директорию, если она не существует
-            if not os.path.exists(PROFILE_IMAGES_DIR):
-                os.makedirs(PROFILE_IMAGES_DIR)
-            
-            # Генерируем имя файла с расширением оригинального файла
-            file_extension = os.path.splitext(new_profile_image.name)[1].lower()
-            image_filename = f"{user_data['username']}{file_extension}"
-            image_path = os.path.join(PROFILE_IMAGES_DIR, image_filename)
-            
-            # Сохраняем новое изображение
-            with open(image_path, "wb") as f:
-                f.write(new_profile_image.getbuffer())
-            
-            # Проверяем, что файл успешно сохранен
-            if os.path.exists(image_path):
-                # Удаляем старое изображение
-                old_image_path = user_data.get('profile_image')
-                if old_image_path and old_image_path != os.path.join(PROFILE_IMAGES_DIR, "default_user_icon.png"):
-                    if os.path.exists(old_image_path):
-                        try:
-                            os.remove(old_image_path)
-                        except Exception as e:
-                            st.warning(f"Не удалось удалить старое изображение: {e}")
-                
-                updates['profile_image'] = image_path
-                needs_reload = True
+            is_strong, message = is_strong_password(new_password)
+            if not is_strong:
+                st.error(message)
             else:
-                st.error("Ошибка при сохранении изображения")
-                
-        except Exception as e:
-            st.error(f"Ошибка при обработке изображения: {e}")
-            st.stop()
+                updates['password'] = hash_password(new_password)
+                needs_reload = True
 
-    # Применяем все обновления разом
+    # Применяем обновления
     if updates:
         try:
-            user_db.update(updates, User.username == st.session_state.username)
+            # Обновляем данные в базе, используя старое имя пользователя для поиска
+            user_db.update(updates, User.username == old_username)
             format_database()
+            
+            # Обновляем session_state только после успешного обновления базы
+            if 'username' in updates:
+                st.session_state.username = updates['username']
+            
             st.success("Данные успешно обновлены")
             if needs_reload:
                 st.rerun()
         except Exception as e:
             st.error(f"Ошибка при обновлении данных: {e}")
     else:
-        st.info("Нет изменений для обновления.")
+        st.info("Нет изменений для обновления")
 
 # Зона для выхода из аккаунта
 if st.button("Выйти"):

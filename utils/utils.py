@@ -115,6 +115,12 @@ def update_remaining_generations(username, remaining):
         # Деактивируем токен и удаляем его из базы
         user = user_db.get(User.username == username)
         if user and user.get('active_token'):
+            # Получаем использованный ключ
+            used_key = user['active_token']
+            
+            # Удаляем использованный ключ из файлов
+            remove_used_key(used_key)
+            
             # Обновляем данные пользователя
             user_db.update({
                 'active_token': None,
@@ -125,8 +131,6 @@ def update_remaining_generations(username, remaining):
             # Очищаем session state
             if 'access_granted' in st.session_state:
                 st.session_state.access_granted = False
-            if 'active_token' in st.session_state:
-                st.session_state.active_token = None
             
             return True
     else:
