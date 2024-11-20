@@ -22,8 +22,30 @@ st.set_page_config(
     page_title="Бизнес-Идея",
     page_icon="💡",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
+    menu_items={
+        'Get Help': None,
+        'Report a bug': None,
+        'About': None
+    }
 )
+
+# Добавьте этот код после конфигурации страницы
+st.markdown("""
+    <style>
+        [data-testid="collapsedControl"] {
+            display: none
+        }
+        #MainMenu {visibility: hidden;}
+        .css-1rs6os {visibility: hidden;}
+        .css-17ziqus {visibility: hidden;}
+        section[data-testid="stSidebar"] {
+            width: 250px !important;
+            min-width: 250px !important;
+            max-width: 250px !important;
+        }
+    </style>
+""", unsafe_allow_html=True)
 
 # Инициализация session state
 if 'username' not in st.session_state:
