@@ -20,7 +20,8 @@ st.set_page_config(page_title="Личный кабинет", layout="wide")
 # Проверка аутентификации
 if "authenticated" not in st.session_state or not st.session_state.authenticated:
     st.error("Пожалуйста, войдите в систему")
-    switch_to_page(PAGE_CONFIG["registr"]["name"])
+    file_path = os.path.join("pages", PAGE_CONFIG["registr"]["name"])
+    switch_page(file_path)
     st.stop()
 
 # Инициализация базы данных пользователей
@@ -38,7 +39,8 @@ if not user_data:
     st.error("Пользователь не найден.")
     st.session_state.authenticated = False
     st.session_state.username = None
-    switch_to_page(PAGE_CONFIG["registr"]["name"])
+    file_path = os.path.join("pages", PAGE_CONFIG["registr"]["name"])
+    switch_page(file_path)
     st.stop()
 
 user_data = user_data[0]
@@ -86,7 +88,8 @@ if user_data.get('active_token'):
 else:
     st.warning("У вас нет активного токена. Для использования сервиса необходимо активировать токен.")
     if st.button("Активировать токен"):
-        switch_to_page(PAGE_CONFIG["key_input"]["name"])
+        file_path = os.path.join("pages", PAGE_CONFIG["key_input"]["name"])
+        switch_page(file_path)
 
 # Зона для обновления данных
 st.header("Обновление данных")
@@ -236,4 +239,5 @@ if st.button("Выйти"):
     st.session_state.remaining_generations = 0
     st.session_state.is_admin = False  # Удаляем статус администратора
     setup_pages()
-    switch_to_page(PAGE_CONFIG["registr"]["name"])
+    file_path = os.path.join("pages", PAGE_CONFIG["registr"]["name"])
+    switch_page(file_path)
