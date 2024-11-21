@@ -227,7 +227,7 @@ chat_bot_html = """
 <script type="module">
     import Chatbot from "https://cdn.jsdelivr.net/npm/flowise-embed/dist/web.js"
     Chatbot.init({
-        chatflowid: "d3dcc759-d88b-4dce-85c0-2b64d984e863",
+        chatflowid: "fc24280f-f41c-4121-b1fb-c41176a726e9",
         apiHost: "https://flowise-renataraev64.amvera.io",
         chatflowConfig: {
             // topK: 2
