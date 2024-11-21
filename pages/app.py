@@ -124,7 +124,7 @@ def submit_question():
             response = requests.post(
                 st.secrets["flowise"]["api_url"],
                 json=payload,
-                timeout=30  # Добавляем таймаут
+                timeout=100  # Добавляем таймаут
             )
             
             # Проверяем статус ответа
@@ -350,7 +350,7 @@ def main():
 
     # Поле ввода с формой в основной части
     with st.form(key='question_form', clear_on_submit=True):
-        st.text_input("Ввеите ваш вопрос", key="user_input")
+        st.text_area("Введите ваш вопрос", key="user_input", height=100)
         submit_button = st.form_submit_button("Отправить")
 
     if submit_button:
