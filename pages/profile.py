@@ -39,8 +39,8 @@ if not user_data:
     st.error("Пользователь не найден.")
     st.session_state.authenticated = False
     st.session_state.username = None
-    switch_page(PAGE_CONFIG["registr"]["name"])
-    st.stop()
+    st.session_state.is_admin = False
+    st.rerun()  # Используем rerun вместо switch_page
 
 user_data = user_data[0]
 # Синхронизируем session state с данными из базы
