@@ -7,6 +7,6 @@ meta:
 build:
   requirementsPath: requirements.txt
 run:
-  command: streamlit run main.py --server.port=80
+  command: streamlit run main.py --server.port=80 --server.fileWatcherType none
   persistenceMount: /data
   containerPort: 80
