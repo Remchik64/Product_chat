@@ -48,13 +48,20 @@ PAGE_CONFIG = {
 def setup_pages():
     pages_to_show = []
     
-    # Добавляем все страницы в список
+    # Всегда добавляем страницу регистрации первой
+    pages_to_show.append(
+        Page("pages/registr.py", name=PAGE_CONFIG["registr"]["name"], icon=PAGE_CONFIG["registr"]["icon"])
+    )
+    
+    # Добавляем остальные страницы
     for page_id, config in sorted(PAGE_CONFIG.items(), key=lambda x: x[1]["order"]):
+        if page_id == "registr":
+            continue
+            
         is_authenticated = st.session_state.get("authenticated", False)
         is_admin = st.session_state.get("is_admin", False)
         
         should_show = (
-            (not is_authenticated and page_id == "registr") or
             (is_authenticated and config["show_when_authenticated"] and
              (not config.get("admin_only") or (config.get("admin_only") and is_admin)))
         )
@@ -65,11 +72,5 @@ def setup_pages():
                 pages_to_show.append(
                     Page(page_path, name=config["name"], icon=config["icon"])
                 )
-    
-    if not pages_to_show:
-        # Если список пуст, добавляем хотя бы страницу регистрации
-        pages_to_show.append(
-            Page("pages/registr.py", name=PAGE_CONFIG["registr"]["name"], icon=PAGE_CONFIG["registr"]["icon"])
-        )
     
     show_pages(pages_to_show)

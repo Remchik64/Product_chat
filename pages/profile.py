@@ -20,6 +20,7 @@ setup_pages()
 # Проверка аутентификации
 if "authenticated" not in st.session_state or not st.session_state.authenticated:
     st.error("Пожалуйста, войдите в систему")
+    setup_pages()
     switch_page(PAGE_CONFIG["registr"]["name"])
     st.stop()
 
