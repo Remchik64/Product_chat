@@ -14,5 +14,5 @@ googletrans==4.0.0-rc1
 flowise
 streamlit-option-menu==0.4.0
 passlib==1.7.4
-together-ai
+together
 langchain-text-splitters==0.2.2
