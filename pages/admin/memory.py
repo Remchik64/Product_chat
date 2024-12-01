@@ -293,8 +293,8 @@ st.sidebar.markdown("---")
 st.sidebar.title("Настройки анализа")
 st.sidebar.number_input(
     "Количество сообщений для анализа",
-    min_value=5,
-    max_value=50,
+    min_value=1,
+    max_value=30,
     value=10,
     key="n_messages",
     help="Количество последних сообщений, которые будут анализироваться"

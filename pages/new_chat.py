@@ -179,7 +179,7 @@ if user:
 NEW_CHAT_SETTINGS_KEY = "new_chat_context_settings"
 
 # Настройки контекста в боковой панели
-st.sidebar.title("Настройки контекста")
+st.sidebar.title("Настройки контекста для истории")
 
 # Инициализация настроек в session_state если их нет
 if NEW_CHAT_SETTINGS_KEY not in st.session_state:
@@ -198,11 +198,11 @@ use_context = st.sidebar.checkbox(
 if use_context:
     context_messages = st.sidebar.slider(
         "Количество сообщений для анализа",
-        min_value=3,
-        max_value=20,
+        min_value=1,
+        max_value=30,
         value=st.session_state[NEW_CHAT_SETTINGS_KEY]["context_messages"],
         key=f"{NEW_CHAT_SETTINGS_KEY}_slider",
-        help="Количество последних сообщений, которые будут анализироваться для создания контекста"
+        help="Количество последних сообщений, которые будут анализироваться для создания контекста,начните с 1 и увеличивайте по мере роста истории"
     )
 
 # Обновляем настройки в session_state
@@ -384,7 +384,7 @@ def submit_message(user_input):
                     st.session_state.message_hashes.add(assistant_hash)
                     chat_db.add_message("assistant", translated_text)
                 
-                # Обновляем количество генераций
+                # Об��овляем количество генераций
                 update_remaining_generations(st.session_state.username, -1)
                 st.rerun()
                 
