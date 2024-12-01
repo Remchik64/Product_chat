@@ -1,6 +1,6 @@
 import os
 import streamlit as st
-from together import Together
+import together  # Изменен импорт
 import json
 from utils.chat_database import ChatDatabase
 from tinydb import TinyDB, Query
@@ -9,7 +9,7 @@ class ContextManager:
     def __init__(self):
         # Инициализируем Together API для анализа контекста
         os.environ["TOGETHER_API_KEY"] = st.secrets["together"]["api_key"]
-        self.together_client = Together()
+        together.api_key = st.secrets["together"]["api_key"]  # Изменена инициализация
         
     def get_context(self, username, message, flow_id=None, last_n_messages=10):
         """Получает контекст для сообщения на основе истории чата"""
@@ -68,12 +68,9 @@ class ContextManager:
 Проанализируй историю чата и выдели только ту информацию, которая напрямую связана с новым вопросом. Верни только релевантные части диалога, которые помогут лучше понять контекст вопроса. [/INST]"""
 
             # Запрос к Together.ai
-            response = self.together_client.chat.completions.create(
+            response = together.Complete.create(  # Изменен вызов API
                 model="meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
-                messages=[{
-                    "role": "user",
-                    "content": context_prompt
-                }],
+                prompt=context_prompt,
                 max_tokens=1024,
                 temperature=0.7,
                 top_p=0.8,

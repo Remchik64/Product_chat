@@ -1,6 +1,6 @@
 import streamlit as st
 from utils.page_config import setup_pages
-from together import Together
+import together  # Изменен импорт
 import os
 from tinydb import TinyDB, Query
 import json
@@ -102,7 +102,7 @@ with st.sidebar.expander("Настройки генерации", expanded=True)
 # Инициализация Together API с ключом из secrets
 try:
     os.environ["TOGETHER_API_KEY"] = st.secrets["together"]["api_key"]
-    client = Together()
+    together.api_key = st.secrets["together"]["api_key"]  # Изменена инициализация
 except Exception as e:
     st.error(f"Ошибка инициализации Together API: {str(e)}")
     st.stop()
@@ -152,15 +152,9 @@ def analyze_chat_history(username, chat_id=None, last_n_messages=10):
         settings = st.session_state.model_settings
         
         # Запрос к модели для анализа
-        response = client.chat.completions.create(
+        response = together.Complete.create(
             model=settings["model"],
-            messages=[{
-                "role": "system",
-                "content": "Ты - помощник по анализу контекста диалога. Твоя задача - анализировать историю конкретного чата и выделять релевантный контекст, не смешивая его с другими чатами."
-            }, {
-                "role": "user",
-                "content": analysis_prompt
-            }],
+            prompt=analysis_prompt,
             max_tokens=settings["max_tokens"],
             temperature=settings["temperature"],
             top_p=settings["top_p"],
@@ -168,7 +162,7 @@ def analyze_chat_history(username, chat_id=None, last_n_messages=10):
             repetition_penalty=settings["repetition_penalty"]
         )
         
-        return response.choices[0].message.content
+        return response['output']['choices'][0]['text']
         
     except Exception as e:
         st.error(f"Ошибка при анализе истории: {str(e)}")
