@@ -11,9 +11,7 @@ streamlit-chat==0.1.1
 Pillow==10.4.0
 st-pages==0.3.4
 googletrans==4.0.0-rc1
-flowise==1.0.4
 streamlit-option-menu==0.4.0
 passlib==1.7.4
 together==0.2.4
 langchain-text-splitters==0.0.1
-git+https://github.com/FlowiseAI/Flowise.git

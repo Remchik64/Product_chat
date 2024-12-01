@@ -11,7 +11,6 @@ User = Query()  # Добавьте эту строку после импорта
 from utils.utils import update_remaining_generations
 from utils.chat_database import ChatDatabase
 from utils.page_config import PAGE_CONFIG, setup_pages
-from flowise import Flowise
 from typing import List
 from utils.context_manager import ContextManager
 
