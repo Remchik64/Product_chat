@@ -8,7 +8,7 @@ font="monospace"
 hideTopBar = true
 
 [server]
-enableCORS = false
+enableCORS = true
 enableXsrfProtection = true
 maxUploadSize = 5
 
