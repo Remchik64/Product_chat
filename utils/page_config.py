@@ -24,11 +24,11 @@ PAGE_CONFIG = {
         "show_when_authenticated": True
     },
     "new_chat": {
-        "name": "Новый чат",
+        "name": "Личный помощник",
         "icon": "💭",
         "order": 4,
         "show_when_authenticated": True,
-        "show_in_menu": False
+        "show_in_menu": True
     },
     "profile": {
         "name": "Профиль",
@@ -42,6 +42,13 @@ PAGE_CONFIG = {
         "order": 6,
         "show_when_authenticated": True,
         "admin_only": True
+    },
+    "admin/memory": {
+        "name": "Память",
+        "icon": "🧠",
+        "order": 7,
+        "show_when_authenticated": True,
+        "admin_only": True
     }
 }
 
@@ -49,6 +56,7 @@ def setup_pages():
     pages_to_show = []
     is_authenticated = st.session_state.get("authenticated", False)
     is_admin = st.session_state.get("is_admin", False)
+    has_flowise_key = st.session_state.get("flowise_api_key", None)
     
     # Показываем страницу регистрации только если пользователь не аутентифицирован
     if not is_authenticated:

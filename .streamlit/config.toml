@@ -1,5 +1,3 @@
-
-
 [theme]
 base="dark"
 secondaryBackgroundColor="#32333f"
@@ -16,4 +14,7 @@ maxUploadSize = 5
 
 [runner]
 fastReruns = true
+
+[client]
+showSidebarNavigation = true
 

@@ -13,6 +13,10 @@ from utils.chat_database import ChatDatabase
 from utils.page_config import PAGE_CONFIG, setup_pages
 from flowise import Flowise
 from typing import List
+from utils.context_manager import ContextManager
+
+# Ключ для настроек основного чата
+MAIN_CHAT_SETTINGS_KEY = "main_chat_context_settings"
 
 # Сначала конфигурация страницы
 st.set_page_config(
@@ -24,6 +28,9 @@ st.set_page_config(
 
 # Затем настройка страниц
 setup_pages()
+
+# Инициализация менеджера контекста
+context_manager = ContextManager()
 
 # Проверка аутентификации
 if "authenticated" not in st.session_state or not st.session_state.authenticated:
@@ -59,13 +66,13 @@ if user_data:
         st.warning("Пожалуйста, введите ключ доступа")
         switch_page("Ввод/Покупка токена")
 else:
-    st.error("Пользователь не найден")
+    st.error("Пользователь н найден")
     st.session_state.authenticated = False
     setup_pages()
     switch_page("Вход/Регистрация")
 
 # Инициализируем базы данных
-chat_db = ChatDatabase(st.session_state.username)
+chat_db = ChatDatabase(f"{st.session_state.username}_main_chat")  # Добавляем суффикс для главной страницы
 
 # Папка с изображениями профиля (исправленный путь)
 PROFILE_IMAGES_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'profile_images'))
@@ -118,13 +125,29 @@ def submit_question():
     # Добавляем индикатор загрузки
     with st.spinner('Отправляем ваш запрос...'):
         try:
+            # Получаем настройки контекста для основного чата
+            settings = st.session_state.get(MAIN_CHAT_SETTINGS_KEY, {
+                "use_context": True,
+                "context_messages": 10
+            })
+            
+            # Получаем контекст для сообщения с учетом настроек
+            if settings["use_context"]:
+                enhanced_message = context_manager.get_context(
+                    st.session_state.username,
+                    user_input,
+                    last_n_messages=settings["context_messages"]
+                )
+            else:
+                enhanced_message = user_input
+            
             payload = {
-                "question": user_input
+                "question": enhanced_message
             }
             response = requests.post(
                 st.secrets["flowise"]["api_url"],
                 json=payload,
-                timeout=100  # Добавляем таймаут
+                timeout=100
             )
             
             # Проверяем статус ответа
@@ -161,15 +184,12 @@ def submit_question():
             # Добавляем сообщения и обновляем интерфейс
             if user_hash not in st.session_state.message_hashes:
                 st.session_state.message_hashes.add(user_hash)
-                user_avatar = get_user_profile_image(st.session_state.username)
-                with st.chat_message("user", avatar=user_avatar):
-                    st.write(user_input)
+                display_user_message(user_input)
                 chat_db.add_message("user", user_input)
 
             if assistant_hash not in st.session_state.message_hashes:
                 st.session_state.message_hashes.add(assistant_hash)
-                with st.chat_message("assistant", avatar=assistant_avatar):
-                    st.write(translated_text)
+                display_assistant_message(translated_text)
                 chat_db.add_message("assistant", translated_text)
 
             # Очищаем поле ввода
@@ -193,7 +213,7 @@ def translate_text(text):
         return "Ошиба пеевода: некорректный ответ от переводчика"
         
     except Exception as e:
-        st.error(f"Ошибка при перевод: {str(e)}")
+        st.error(f"шибка при еревод: {str(e)}")
         # овращаем оригинальный текст в случае ошибки
         return f"Оригинальный текст: {text}"
 
@@ -222,97 +242,31 @@ def verify_user_access():
         
     return True
 
-chat_bot_html = """
-<div style="height: 600px; width: 100%;">
-<script type="module">
-    import Chatbot from "https://cdn.jsdelivr.net/npm/flowise-embed/dist/web.js"
-    Chatbot.init({
-        chatflowid: "fc24280f-f41c-4121-b1fb-c41176a726e9",
-        apiHost: "https://flowise-renataraev64.amvera.io",
-        chatflowConfig: {
-            // topK: 2
-        },
-        theme: {
-            button: {
-                backgroundColor: "#000000",
-                right: 20,
-                bottom: 20,
-                size: 48, // small | medium | large | number
-                dragAndDrop: true,
-                iconColor: "white",
-                customIconSrc: "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/svg/google-messages.svg",
-                autoWindowOpen: {
-                    autoOpen: true,      // Автоматически открывать окно чата
-                    openDelay: 0,        // Задержка открытия в секундах (0 - без задержки)
-                    autoOpenOnMobile: true, // Автоматически открывать на мобильных устройствах
-                },
-            },
-            tooltip: {
-                showTooltip: true,
-                tooltipMessage: 'Привет!',
-                tooltipBackgroundColor: 'black',
-                tooltipTextColor: 'white',
-                tooltipFontSize: 16,
-            },
-            chatWindow: {
-                showTitle: true,
-                title: 'Поддержка/Советы',
-                titleAvatarSrc: '',
-                showAgentMessages: true,
-                welcomeMessage: 'Привет! Я помогу вам с вопросами.',
-                errorMessage: 'This is a custom error message',
-                backgroundColor: "#ffffff",
-                backgroundImage: 'enter image path or link', // If set, this will overlap the background color of the chat window.
-                height: 700,
-                width: 400,
-                fontSize: 16,
-                //starterPrompts: ['What is a bot?', 'Who are you?'], // It overrides the starter prompts set by the chat flow passed
-                starterPromptFontSize: 15,
-                clearChatOnReload: false, // If set to true, the chat will be cleared when the page reloads.
-                botMessage: {
-                    backgroundColor: "#f7f8ff",
-                    textColor: "#303235",
-                    showAvatar: false,
-                    showBotName: true,
-                    botName: "Bot",
-                    botNameColor: "#303235"
-                },
-                userMessage: {
-                    backgroundColor: "#000000",
-                    textColor: "#ffffff",
-                    showAvatar: false,
-                    showUserName: true,
-                    userName: "User",
-                    userNameColor: "#ffffff"
-                },
-                textInput: {
-                    placeholder: 'Введите ваш вопрос',
-                    backgroundColor: '#ffffff',
-                    textColor: '#303235',
-                    sendButtonColor: '#000000',           
-                    autoFocus: true, // If not used, autofocus is disabled on mobile and enabled on desktop. true enables it on both, false disables it on both.
-                    sendMessageSound: true,
-                    // sendSoundLocation: "send_message.mp3", // If this is not used, the default sound effect will be played if sendSoundMessage is true.
-                    receiveMessageSound: true,
-                    // receiveSoundLocation: "receive_message.mp3", // If this is not used, the default sound effect will be played if receiveSoundMessage is true. 
-                },
-                feedback: {
-                    color: '#303235',
-                },
-                footer: {
-                    textColor: '#303235',
-                    text: '',
-                    company: '',
-                    companyLink: '',
-                }
-            }
-        }
-    })
-</script>
-</div>
-"""
+
+
+def display_assistant_message(content):
+    with st.chat_message("assistant", avatar=assistant_avatar):
+        st.write(content)
+
+def display_user_message(content):
+    user_avatar = get_user_profile_image(st.session_state.username)
+    with st.chat_message("user", avatar=user_avatar):
+        st.write(content)
 
 def main():
+    # Инициализируем базу данных чата в начале функции main
+    chat_db = ChatDatabase(f"{st.session_state.username}_main_chat")
+    
+    # Получаем историю чата
+    chat_history = chat_db.get_history()
+    
+    # Отображаем историю чата
+    for message in chat_history:
+        if message["role"] == "assistant":
+            display_assistant_message(message["content"])
+        else:
+            display_user_message(message["content"])
+    
     st.title("Бизнес-Идея")
 
     # Отображаем количество генераций в начале
@@ -320,31 +274,44 @@ def main():
 
     # Добавляем кнопк очистки чата
     if st.sidebar.button("Очистить чат"):
-        clear_chat_history()
+        chat_db.clear_history()
         st.rerun()
 
     # Добавляем разделитель в боковом меню
     st.sidebar.markdown("---")
     
-    # Перемещаем чат-бот в конец бокового меню
-    st.sidebar.markdown("### Чат поддержки ")
-    with st.sidebar:
-        components.html(
-            chat_bot_html,
-            height=600,
-            width=None,
-            scrolling=False
+    # Настройки контекста в боковой панели
+    st.sidebar.title("Настройки контекста")
+
+    # Инициализация настроек в session_state если их нет
+    if MAIN_CHAT_SETTINGS_KEY not in st.session_state:
+        st.session_state[MAIN_CHAT_SETTINGS_KEY] = {
+            "use_context": True,
+            "context_messages": 10
+        }
+
+    # Настройки контекста
+    use_context = st.sidebar.checkbox(
+        "Использовать контекст истории",
+        value=st.session_state[MAIN_CHAT_SETTINGS_KEY]["use_context"],
+        key=f"{MAIN_CHAT_SETTINGS_KEY}_use_context"
+    )
+
+    if use_context:
+        context_messages = st.sidebar.slider(
+            "Количество сообщений для анализа",
+            min_value=3,
+            max_value=20,
+            value=st.session_state[MAIN_CHAT_SETTINGS_KEY]["context_messages"],
+            key=f"{MAIN_CHAT_SETTINGS_KEY}_slider",
+            help="Количество последних сообщений, которые будут анализироваться для создания контекста"
         )
 
-    # Отображение истории сообщений в основной части
-    chat_history = chat_db.get_history()
-    for idx, msg in enumerate(chat_history):
-        if msg["role"] == "user":
-            avatar = get_user_profile_image(st.session_state.username)
-        else:
-            avatar = assistant_avatar
-        with st.chat_message(msg["role"], avatar=avatar):
-            st.write(msg["content"])
+    # Обновляем настройки в session_state
+    st.session_state[MAIN_CHAT_SETTINGS_KEY].update({
+        "use_context": use_context,
+        "context_messages": context_messages if use_context else 10
+    })
 
     # Поле ввода с формой в основной части
     with st.form(key='question_form', clear_on_submit=True):

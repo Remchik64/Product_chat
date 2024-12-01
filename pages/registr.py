@@ -128,12 +128,6 @@ if st.session_state.show_registration_form:
         reg_password = st.text_input("Пароль", type="password")
         reg_confirm_password = st.text_input("Подтвердите пароль", type="password")
         
-        # Добавлям загрузчик файла для фотографии профиля
-        reg_profile_image = st.file_uploader("Загрузите фотографию профиля", type=["png", "jpg", "jpeg"])
-        
-        if reg_profile_image is not None:
-            st.image(reg_profile_image, width=150)
-        
         submit_button = st.form_submit_button("Вход")
         
         if submit_button:
@@ -142,37 +136,20 @@ if st.session_state.show_registration_form:
             elif reg_password != reg_confirm_password:
                 st.error("Пароли не совпадают")
             else:
-                # Сохранение фотографии профиля
-                if reg_profile_image is not None:
-                    MAX_FILE_SIZE = 2 * 1024 * 1024  # 2MB
-                    if reg_profile_image.size > MAX_FILE_SIZE:
-                        st.error("Размер файла превышает 2MB.")
-                        st.stop()
-                    # Генерация уник��льного имени файла
-                    image_filename = f"{reg_username}.png"
-                    image_path = os.path.join(PROFILE_IMAGES_DIR, image_filename)
-                    with open(image_path, "wb") as f:
-                        f.write(reg_profile_image.getbuffer())
-                    try:
-                        img = Image.open(reg_profile_image)
-                        img.verify()
-                    except (IOError, SyntaxError) as e:
-                        st.error("Файл не является допустимым изображением.")
-                        st.stop()
-                else:
-                    image_path = os.path.join(PROFILE_IMAGES_DIR, "default_user_icon.png")  # Путь к стандартной иконке
-
-                success, message = register_user(reg_username, reg_email, reg_password, image_path)
+                # Используем стандартный аватар для всех новых пользователей
+                default_image_path = os.path.join(PROFILE_IMAGES_DIR, "default_user_icon.png")
+                
+                success, message = register_user(reg_username, reg_email, reg_password, default_image_path)
                 if success:
                     st.success(message)
                     st.session_state.username = reg_username
                     st.session_state.authenticated = True
                     setup_pages() 
-                    switch_page(PAGE_CONFIG["key_input"]["name"])  # Изменено с "app" на "Главная"
+                    switch_page(PAGE_CONFIG["key_input"]["name"])
                 else:
                     st.error(message)
 
-# Добавление CSS для ��нопок
+# Добавление CSS для нопок
 st.markdown(
     """
     <style>
