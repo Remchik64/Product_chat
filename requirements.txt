@@ -9,7 +9,7 @@ deep_translator==1.11.4
 streamlit-float==0.3.2
 streamlit-chat==0.1.1
 Pillow==10.4.0
-st-pages==0.4.5
+st-pages==0.3.4
 googletrans==4.0.0-rc1
 streamlit-option-menu==0.4.0
 passlib==1.7.4
