@@ -300,11 +300,11 @@ def main():
     if use_context:
         context_messages = st.sidebar.slider(
             "Количество сообщений для анализа",
-            min_value=1,
+            min_value=3,
             max_value=30,
             value=st.session_state[MAIN_CHAT_SETTINGS_KEY]["context_messages"],
             key=f"{MAIN_CHAT_SETTINGS_KEY}_slider",
-            help="Количество последних сообщений, которые будут анализироваться для создания контекста,начните с 1 и увеличивайте по мере роста истории"
+            help="Количество последних сообщений, которые будут анализироваться для создания контекста."
         )
 
     # Обновляем настройки в session_state

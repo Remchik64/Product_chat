@@ -22,7 +22,7 @@ st.sidebar.title("Настройки модели")
 # Выбор модели
 if "model_settings" not in st.session_state:
     st.session_state.model_settings = {
-        "model": "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
+        "model": "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
         "max_tokens": 512,
         "temperature": 0.7,
         "top_p": 0.7,
