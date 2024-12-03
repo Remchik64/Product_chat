@@ -322,7 +322,7 @@ def submit_message(user_input):
         return
         
     if remaining_generations <= 0:
-        st.error("У вас закончились генераций. Пожалуйста, активируйте новый токен.")
+        st.error("У вас закончились генераций. П��жалуйста, активируйте новый токен.")
         return
         
     # Сохраняем и отображаем сообщение пользователя
@@ -359,17 +359,32 @@ def submit_message(user_input):
                     "question": enhanced_message
                 }
                 
+                # Добавляем отладочную информацию
+                st.debug(f"Отправляем запрос на URL: {api_url}")
+                st.debug(f"Payload: {payload}")
+                
                 response = requests.post(
                     api_url,
                     json=payload,
                     timeout=100
                 )
                 
+                # Проверяем статус и содержимое ответа
+                st.debug(f"Статус ответа: {response.status_code}")
+                st.debug(f"Содержимое ответа: {response.text}")
+                
                 if response.status_code != 200:
                     st.error(f"Ошибка API: {response.status_code}")
+                    st.error(f"Текст ошибки: {response.text}")
+                    return
+                
+                try:
+                    output = response.json()
+                except json.JSONDecodeError as e:
+                    st.error(f"Ошибка при разборе JSON ответа: {str(e)}")
+                    st.error(f"Полученный ответ: {response.text}")
                     return
                     
-                output = response.json()
                 response_text = output.get('text', '')
                 
                 if not response_text:
@@ -391,8 +406,13 @@ def submit_message(user_input):
                 update_remaining_generations(st.session_state.username, -1)
                 st.rerun()
                 
+            except requests.exceptions.RequestException as e:
+                st.error(f"Ошибка сети при отправке запроса: {str(e)}")
             except Exception as e:
                 st.error(f"Ошибка при получении ответа: {str(e)}")
+                st.error(f"Тип ошибки: {type(e)}")
+                import traceback
+                st.error(f"Traceback: {traceback.format_exc()}")
 
 # Создаем контейнер для поля ввода
 input_container = st.container()
