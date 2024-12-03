@@ -269,7 +269,7 @@ if st.sidebar.button("Очистить текущий чат"):
     if 'current_chat_flow' in st.session_state:
         clear_chat_history(st.session_state.username, st.session_state.current_chat_flow['id'])
 
-# Кнопка удаления текущего чата
+# Кнопка удаления текущего ч��та
 if st.sidebar.button("🗑️ Удалить текущий чат", type="secondary", key="sidebar_delete_chat"):
     if 'current_chat_flow' in st.session_state:
         if delete_chat_flow(st.session_state.username, st.session_state.current_chat_flow['id']):
@@ -322,7 +322,7 @@ def submit_message(user_input):
         return
         
     if remaining_generations <= 0:
-        st.error("У вас закончились генераций. П��жалуйста, активируйте новый токен.")
+        st.error("У вас закончились генераций. Пжалуйста, активируйте новый токен.")
         return
         
     # Сохраняем и отображаем сообщение пользователя
@@ -359,9 +359,10 @@ def submit_message(user_input):
                     "question": enhanced_message
                 }
                 
-                # Добавляем отладочную информацию
-                st.debug(f"Отправляем запрос на URL: {api_url}")
-                st.debug(f"Payload: {payload}")
+                # Добавляем отладочную информацию в режиме разработки
+                if st.secrets.get('debug', False):
+                    st.write(f"DEBUG - Отправляем запрос на URL: {api_url}")
+                    st.write(f"DEBUG - Payload: {payload}")
                 
                 response = requests.post(
                     api_url,
@@ -370,8 +371,9 @@ def submit_message(user_input):
                 )
                 
                 # Проверяем статус и содержимое ответа
-                st.debug(f"Статус ответа: {response.status_code}")
-                st.debug(f"Содержимое ответа: {response.text}")
+                if st.secrets.get('debug', False):
+                    st.write(f"DEBUG - Статус ответа: {response.status_code}")
+                    st.write(f"DEBUG - Содержимое ответа: {response.text}")
                 
                 if response.status_code != 200:
                     st.error(f"Ошибка API: {response.status_code}")
