@@ -110,6 +110,20 @@ def submit_question():
     if not verify_user_access():
         return
         
+    # Получаем настройки контекста из session_state
+    settings = st.session_state.get(MAIN_CHAT_SETTINGS_KEY, {
+        "use_context": True,
+        "context_messages": 10
+    })
+    use_context = settings["use_context"]
+    context_messages = settings["context_messages"]
+    
+    # Создаем уникальный ключ для хранения истории этого чата
+    chat_history_key = f"{st.session_state.username}_main_chat_history"
+    
+    # Инициализируем базу данных для этого конкретного чата
+    chat_db = ChatDatabase(f"{st.session_state.username}_main_chat")
+    
     user_input = st.session_state.get('user_input', '')
     if not user_input:
         st.warning("Пожалуйста, введите ваш вопрос.")
@@ -124,9 +138,24 @@ def submit_question():
     # Добавляем индикатор загрузки
     with st.spinner('Отправляем ваш запрос...'):
         try:
+            # Инициализируем менеджер контекста для основного чата
+            chat_context_manager = ContextManager()
+            
+            # Получаем контекст из истории основного чата
+            if use_context:
+                enhanced_message = chat_context_manager.get_context(
+                    username=st.session_state.username,
+                    message=user_input,
+                    flow_id=None,  # Явно указываем None для основного чата
+                    last_n_messages=context_messages
+                )
+            else:
+                enhanced_message = user_input
+            
             payload = {
-                "question": user_input
+                "question": enhanced_message
             }
+            
             response = requests.post(
                 st.secrets["flowise"]["api_url"],
                 json=payload,
@@ -244,7 +273,7 @@ def display_user_message(content):
         st.write(content)
 
 def main():
-    # Инициализируем базу данных чата в начале функции main
+    # Инициализируем базу данных чата
     chat_db = ChatDatabase(f"{st.session_state.username}_main_chat")
     
     # Получаем историю чата
@@ -273,14 +302,14 @@ def main():
     # Настройки контекста в боковой панели
     st.sidebar.title("Настройки контекста для истории")
 
-    # Инициализация настроек в session_state если их нет
+    # Инициализаци�� настроек в session_state если их нет
     if MAIN_CHAT_SETTINGS_KEY not in st.session_state:
         st.session_state[MAIN_CHAT_SETTINGS_KEY] = {
             "use_context": True,
             "context_messages": 10
         }
 
-    # Настройки контекста
+    # Нстройки контекста
     use_context = st.sidebar.checkbox(
         "Использовать контекст истории",
         value=st.session_state[MAIN_CHAT_SETTINGS_KEY]["use_context"],

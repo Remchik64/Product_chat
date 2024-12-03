@@ -328,6 +328,12 @@ def submit_message(user_input):
     # Получаем ID текущего чата
     current_chat_id = st.session_state.current_chat_flow['id']
     
+    # Создаем уникальный ключ для хранения истории этого чата
+    chat_history_key = f"{st.session_state.username}_{current_chat_id}_history"
+    
+    # Инициализируем базу данных для этого конкретного чата
+    chat_db = ChatDatabase(f"{st.session_state.username}_{current_chat_id}")
+    
     # Сохраняем и отображаем сообщение пользователя
     user_hash = get_message_hash("user", user_input)
     if "message_hashes" not in st.session_state:
