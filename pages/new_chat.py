@@ -214,7 +214,7 @@ st.session_state[NEW_CHAT_SETTINGS_KEY].update({
 st.sidebar.markdown("---")
 
 # Управление чат-потоками в боковой панели
-st.sidebar.title("Управление чатами")
+st.sidebar.title("Управление чат-потоками")
 
 # Выбор существующего чат-потока
 chat_flows = get_user_chat_flows(st.session_state.username)
@@ -269,7 +269,7 @@ if st.sidebar.button("Очистить текущий чат"):
     if 'current_chat_flow' in st.session_state:
         clear_chat_history(st.session_state.username, st.session_state.current_chat_flow['id'])
 
-# Кнопка удаления текущего ч��та
+# Кнопка удаления текущего чта
 if st.sidebar.button("🗑️ Удалить текущий чат", type="secondary", key="sidebar_delete_chat"):
     if 'current_chat_flow' in st.session_state:
         if delete_chat_flow(st.session_state.username, st.session_state.current_chat_flow['id']):
@@ -352,17 +352,11 @@ def submit_message(user_input):
                 
                 # Формируем URL с использованием ID текущего чата
                 chat_id = st.session_state.current_chat_flow['id']
-                api_url = f"{st.secrets['flowise']['base_url']}/{chat_id}"
+                api_url = f"{st.secrets['flowise']['base_url']}/api/v1/prediction/{chat_id}"
                 
-                # Отправляем запрос к API
                 payload = {
                     "question": enhanced_message
                 }
-                
-                # Добавляем отладочную информацию в режиме разработки
-                if st.secrets.get('debug', False):
-                    st.write(f"DEBUG - Отправляем запрос на URL: {api_url}")
-                    st.write(f"DEBUG - Payload: {payload}")
                 
                 response = requests.post(
                     api_url,
@@ -370,27 +364,20 @@ def submit_message(user_input):
                     timeout=100
                 )
                 
-                # Проверяем статус и содержимое ответа
-                if st.secrets.get('debug', False):
-                    st.write(f"DEBUG - Статус ответа: {response.status_code}")
-                    st.write(f"DEBUG - Содержимое ответа: {response.text}")
-                
                 if response.status_code != 200:
-                    st.error(f"Ошибка API: {response.status_code}")
-                    st.error(f"Текст ошибки: {response.text}")
+                    st.error("Ошибка при получении ответа от сервера")
                     return
                 
                 try:
                     output = response.json()
-                except json.JSONDecodeError as e:
-                    st.error(f"Ошибка при разборе JSON ответа: {str(e)}")
-                    st.error(f"Полученный ответ: {response.text}")
+                except json.JSONDecodeError:
+                    st.error("Ошибка при обработке ответа")
                     return
                     
                 response_text = output.get('text', '')
                 
                 if not response_text:
-                    st.warning("Получен пустой ответ от API")
+                    st.warning("Получен пустой ответ")
                     return
                 
                 # Переводим ответ
@@ -408,13 +395,14 @@ def submit_message(user_input):
                 update_remaining_generations(st.session_state.username, -1)
                 st.rerun()
                 
-            except requests.exceptions.RequestException as e:
-                st.error(f"Ошибка сети при отправке запроса: {str(e)}")
-            except Exception as e:
-                st.error(f"Ошибка при получении ответа: {str(e)}")
-                st.error(f"Тип ошибки: {type(e)}")
-                import traceback
-                st.error(f"Traceback: {traceback.format_exc()}")
+            except requests.exceptions.ConnectionError:
+                st.error("Ошибка подключения к серверу. Проверьте подключение к интернету")
+            except requests.exceptions.Timeout:
+                st.error("Превышено время ожидания ответа")
+            except requests.exceptions.RequestException:
+                st.error("Ошибка при отправке запроса")
+            except Exception:
+                st.error("Произошла непредвиденная ошибка")
 
 # Создаем контейнер для поля ввода
 input_container = st.container()

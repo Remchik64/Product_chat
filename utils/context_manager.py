@@ -1,102 +1,109 @@
 import os
 import streamlit as st
-import together  # Изменен импорт
+import together
 import json
 from utils.chat_database import ChatDatabase
 from tinydb import TinyDB, Query
+import time
 
 class ContextManager:
     def __init__(self):
         # Инициализируем Together API для анализа контекста
         os.environ["TOGETHER_API_KEY"] = st.secrets["together"]["api_key"]
-        together.api_key = st.secrets["together"]["api_key"]  # Изменена инициализация
+        together.api_key = st.secrets["together"]["api_key"]
         
     def get_context(self, username, message, flow_id=None, last_n_messages=10):
         """Получает контекст для сообщения на основе истории чата"""
-        # Если flow_id не указан, получаем историю из всех чатов пользователя
-        if not flow_id:
-            user_db = TinyDB('user_database.json')
-            User = Query()
-            user = user_db.get(User.username == username)
-            if user and 'chat_flows' in user:
-                all_history = []
-                for flow in user['chat_flows']:
-                    chat_db = ChatDatabase(f"{username}_{flow['id']}")
-                    history = chat_db.get_history()
-                    if history:
-                        all_history.extend(history)
-                # Сортируем по времени и берем последние сообщения
-                all_history.sort(key=lambda x: x.get('timestamp', ''))
-                recent_history = all_history[-last_n_messages:] if all_history else []
-            else:
-                return message
-        else:
-            # Получаем историю конкретного чата
-            chat_db = ChatDatabase(f"{username}_{flow_id}")
-            history = chat_db.get_history()
-            if not history:
-                return message
-            recent_history = history[-last_n_messages:]
+        chat_db = ChatDatabase(f"{username}_{flow_id}" if flow_id else f"{username}_main_chat")
+        history = chat_db.get_history()
         
-        # Проверяем, есть ли история сообщений
-        if not recent_history:
-            print("История сообщений пуста, возвращаем исходное сообщение")
+        if not history:
             return message
             
         try:
-            # Преобразуем историю в читаемый формат
+            # Форматируем историю в структурированный диалог
             formatted_history = []
-            for msg in recent_history:
-                if isinstance(msg, dict):
-                    role = msg.get('role', 'unknown')
-                    content = msg.get('content', '')
-                    formatted_history.append(f"{role}: {content}")
-                else:
-                    formatted_history.append(str(msg))
+            for msg in history:
+                role = "Assistant" if msg['role'] == "assistant" else "User"
+                formatted_history.append(f"{role}: {msg['content']}")
             
             history_text = "\n".join(formatted_history)
             
-            # Используем Together.ai для анализа контекста
-            context_prompt = f"""[INST] Ты - помощник по анализу контекста диалога. Твоя задача - проанализировать историю чата и выделить ключевую информацию, которая важна для понимания нового вопроса.
+            # Создаем промпт для анализа контекста
+            context_prompt = f"""[INST] Ты - ассистент с отличной памятью. Твоя задача - проанализировать всю историю диалога и создать подробный контекст для нового вопроса.
 
-История чата:
+История диалога:
 {history_text}
 
-Новый вопрос:
+Новый вопрос пользователя:
 {message}
 
-Проанализируй историю чата и выдели только ту информацию, которая напрямую связана с новым вопросом. Верни только релевантные части диалога, которые помогут лучше понять контекст вопроса. [/INST]"""
+Пожалуйста:
+1. Проанализируй всю историю диалога
+2. Определи основные темы и ключевые моменты обсуждения
+3. Найди связи между предыдущими вопросами и текущим вопросом
+4. Выдели информацию, которая важна для ответа на текущий вопрос
+5. Создай краткое, но информативное резюме контекста
 
-            # Запрос к Together.ai
-            response = together.Complete.create(  # Изменен вызов API
-                model="meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
-                prompt=context_prompt,
-                max_tokens=1024,
-                temperature=0.7,
-                top_p=0.8,
-                top_k=50,
-                repetition_penalty=1.1
-            )
+Формат ответа:
+1. Основные темы диалога: [перечисли темы]
+2. Ключевые моменты: [важные детали]
+3. Связь с текущим вопросом: [как текущий вопрос связан с предыдущим контекстом]
+4. Релевантная информация: [что важно для ответа]
+
+[/INST]"""
+
+            # Добавляем повторные попытки при сетевых ошибках
+            max_retries = 3
+            retry_delay = 2
             
-            # Получаем анализ контекста от Together.ai
-            context_analysis = response.choices[0].message.content.strip()
-            
-            if not context_analysis or len(context_analysis.strip()) < 10:
-                print("Получен пустой контекст от Together.ai, возвращаем исходное сообщение")
-                return message
-            
-            # Формируем финальное сообщение для Flowise с контекстом
-            enhanced_message = f"""Контекст предыдущего разговора:
+            for attempt in range(max_retries):
+                try:
+                    # Запрос к Together.ai для анализа контекста
+                    response = together.Complete.create(
+                        model="meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
+                        prompt=context_prompt,
+                        max_tokens=2048,
+                        temperature=0.2,
+                        top_p=0.9,
+                        top_k=50,
+                        repetition_penalty=1.1
+                    )
+                    
+                    # Проверяем структуру ответа
+                    if isinstance(response, dict) and 'output' in response:
+                        context_analysis = response['output']['choices'][0]['text'].strip()
+                    else:
+                        print(f"Неожиданный формат ответа: {response}")
+                        return message
+                    
+                    if not context_analysis:
+                        return message
+                    
+                    # Формируем финальное сообщение с контекстом
+                    enhanced_message = f"""Контекст предыдущего диалога:
 {context_analysis}
 
-Текущий вопрос:
+Текущий вопрос пользователя:
 {message}
 
-Пожалуйста, используй предоставленный контекст для формирования полного и связного ответа."""
-            
-            print(f"Отправляем в Flowise сообщение с контекстом: {enhanced_message[:200]}...")
-            return enhanced_message
-            
+Используя предоставленный контекст, дай подробный и связный ответ, учитывая всю историю обсуждения. Убедись, что ответ логически связан с предыдущими темами разговора."""
+                    
+                    return enhanced_message
+                    
+                except (ConnectionError, TimeoutError) as e:
+                    if attempt < max_retries - 1:
+                        print(f"Попытка {attempt + 1} не удалась: {str(e)}")
+                        time.sleep(retry_delay)
+                        continue
+                    else:
+                        print(f"Все попытки подключения исчерпаны: {str(e)}")
+                        return message
+                        
+                except Exception as e:
+                    print(f"Неожиданная ошибка при анализе контекста: {str(e)}")
+                    return message
+                    
         except Exception as e:
-            print(f"Ошибка при анализе контекста через Together.ai: {str(e)}")
+            print(f"Ошибка при обработке истории чата: {str(e)}")
             return message

@@ -135,19 +135,19 @@ def submit_question():
             
             # Проверяем статус ответа
             if response.status_code != 200:
-                st.error(f"Ошибка API: {response.status_code}")
+                st.error("Ошибка при получении ответа от сервера")
                 return
                 
             output = response.json()
             response_text = output.get('text', '')
             
             if not response_text:
-                st.warning("Получен пустой ответ от API.")
+                st.warning("Получен пустой ответ")
                 return
 
             translated_text = translate_text(response_text)
             if not translated_text:
-                st.warning("Ошибка при переводе ответа.")
+                st.warning("Ошибка при переводе ответа")
                 return
 
             # Обновляем количество генераций
@@ -178,14 +178,17 @@ def submit_question():
                     st.write(translated_text)
                 chat_db.add_message("assistant", translated_text)
 
-            # Очищаем поле ввода ТОЛЬКО после успешного получения ответа
-            st.session_state.user_input = ""
+            # Просто перезагружаем страницу после успешной обработки
             st.rerun()
             
+        except requests.exceptions.ConnectionError:
+            st.error("Ошибка подключения к серверу. Проверьте подключение к интернету")
         except requests.exceptions.Timeout:
-            st.error("Превышено время ожидания ответа от сервера")
-        except Exception as e:
-            st.error(f"Ошибка при обработке запроса: {str(e)}")
+            st.error("Превышено время ожидания ответа")
+        except requests.exceptions.RequestException:
+            st.error("Ошибка при отправке запроса")
+        except Exception:
+            st.error("Произошла непредвиденная ошибка")
 
 def translate_text(text):
     try:
@@ -300,12 +303,12 @@ def main():
         "context_messages": context_messages if use_context else 10
     })
 
-    # Изменяем форму ввода
-    with st.form(key='question_form', clear_on_submit=False):  # Изменено на False
-        st.text_area("Введите ваш вопрос", key="user_input", height=100)
+    # Форма ввода
+    with st.form(key='question_form', clear_on_submit=True):
+        user_input = st.text_area("Введите ваш вопрос", key="user_input", height=100)
         submit_button = st.form_submit_button("Отправить")
 
-    if submit_button:
+    if submit_button and user_input:  # Проверяем наличие текста
         submit_question()
 
     st.write(f"Streamlit version: {st.__version__}")

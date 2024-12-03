@@ -24,8 +24,8 @@ if "model_settings" not in st.session_state:
     st.session_state.model_settings = {
         "model": "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
         "max_tokens": 512,
-        "temperature": 0.7,
-        "top_p": 0.7,
+        "temperature": 0.2,
+        "top_p": 0.9,
         "top_k": 50,
         "repetition_penalty": 1.1
     }
@@ -119,34 +119,55 @@ def get_chat_flows(username):
 def analyze_chat_history(username, chat_id=None, last_n_messages=10):
     """Анализирует историю конкретного чата пользователя и возвращает релевантный контекст"""
     # Определяем ID чата
-    chat_db_name = f"{username}_main_chat" if chat_id is None else f"{username}_{chat_id}"
+    chat_db_name = f"{username}_{chat_id}" if chat_id else f"{username}_main_chat"
     chat_db = ChatDatabase(chat_db_name)
     history = chat_db.get_history()
     
     if not history:
         return None
         
-    # Берем последние n сообщений
-    recent_history = history[-last_n_messages:]
+    # Форматируем историю в структурированный диалог
+    formatted_history = []
+    for msg in history:
+        role = "Assistant" if msg['role'] == "assistant" else "User"
+        formatted_history.append(f"{role}: {msg['content']}")
     
-    # Получаем информацию о текущем чате
-    chat_info = ""
-    if chat_id:
-        chat_flows = get_chat_flows(username)
-        current_chat = next((flow for flow in chat_flows if flow['id'] == chat_id), None)
-        if current_chat:
-            chat_info = f"Текущий чат: {current_chat['name']}\n"
+    history_text = "\n".join(formatted_history)
     
     # Формируем промпт для анализа
-    analysis_prompt = f"""{chat_info}Проанализируй последние сообщения из этого конкретного чата и выдели ключевой контекст для следующего ответа.
-Помни, что этот контекст относится только к текущему чату и не должен смешиваться с контекстом других чатов.
+    analysis_prompt = f"""[INST] Ты - ассистент с отличной памятью, анализирующий историю диалога. 
+Проанализируй историю чата и создай подробный отчет о контексте и развитии диалога.
 
-История чата:
-{json.dumps(recent_history, ensure_ascii=False, indent=2)}
+История диалога:
+{history_text}
 
-Выдели самую важную информацию и контекст из этой истории, которые могут быть полезны для следующего ответа.
-Учитывай только информацию из текущего чата."""
-    
+Пожалуйста, предоставь структурированный анализ по следующим пунктам:
+
+1. Основные темы диалога:
+   - Перечисли все обсуждаемые темы
+   - Укажи их взаимосвязи
+
+2. Ключевые моменты обсуждения:
+   - Важные детали и факты
+   - Принятые решения
+   - Заданные вопросы
+
+3. Развитие диалога:
+   - Как менялись темы
+   - Какие вопросы остались открытыми
+   - Какие темы требуют продолжения
+
+4. Контекстные связи:
+   - Как темы связаны между собой
+   - Какая информация может быть важна для будущих ответов
+
+5. Рекомендации:
+   - Какие темы стоит развить
+   - На что обратить внимание в будущих ответах
+
+Формат ответа должен быть четко структурирован по этим пунктам.
+[/INST]"""
+
     try:
         # Используем настройки из session_state
         settings = st.session_state.model_settings
@@ -155,14 +176,24 @@ def analyze_chat_history(username, chat_id=None, last_n_messages=10):
         response = together.Complete.create(
             model=settings["model"],
             prompt=analysis_prompt,
-            max_tokens=settings["max_tokens"],
+            max_tokens=2048,  # Увеличиваем для более подробного анализа
             temperature=settings["temperature"],
             top_p=settings["top_p"],
             top_k=settings["top_k"],
             repetition_penalty=settings["repetition_penalty"]
         )
         
-        return response['output']['choices'][0]['text']
+        analysis = response['output']['choices'][0]['text'].strip()
+        
+        # Добавляем метаданные о чате
+        chat_info = ""
+        if chat_id:
+            chat_flows = get_chat_flows(username)
+            current_chat = next((flow for flow in chat_flows if flow['id'] == chat_id), None)
+            if current_chat:
+                chat_info = f"\nАнализ чата: {current_chat['name']}\n"
+        
+        return f"{chat_info}\n{analysis}"
         
     except Exception as e:
         st.error(f"Ошибка при анализе истории: {str(e)}")
@@ -171,13 +202,19 @@ def analyze_chat_history(username, chat_id=None, last_n_messages=10):
 def inject_context(original_message, context, chat_name=None):
     """Объединяет исходное сообщение пользователя с контекстом"""
     chat_info = f"Чат: {chat_name}\n" if chat_name else ""
-    return f"""{chat_info}Контекст предыдущего разговора в этом чате:
+    return f"""{chat_info}
+Анализ контекста предыдущего диалога:
 {context}
 
 Текущий вопрос пользователя:
 {original_message}
 
-Пожалуйста, используй только контекст из текущего чата для формирования релевантного ответа."""
+Используя предоставленный анализ контекста, сформируй подробный и связный ответ.
+Убедись, что ответ:
+1. Учитывает всю релевантную информацию из истории диалога
+2. Логически связан с предыдущими темами
+3. Развивает обсуждение в правильном направлении
+4. Отвечает на текущий вопрос с учетом полного контекста"""
 
 # Интерфейс для тестирования
 st.subheader("Тестирование анализа истории чата")
