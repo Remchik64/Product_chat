@@ -350,13 +350,17 @@ def submit_message(user_input):
                 else:
                     enhanced_message = user_input
                 
+                # Формируем URL с использованием ID текущего чата
+                chat_id = st.session_state.current_chat_flow['id']
+                api_url = f"{st.secrets['flowise']['base_url']}/{chat_id}"
+                
                 # Отправляем запрос к API
                 payload = {
                     "question": enhanced_message
                 }
                 
                 response = requests.post(
-                    st.secrets["flowise"]["api_url"],
+                    api_url,
                     json=payload,
                     timeout=100
                 )
@@ -383,7 +387,7 @@ def submit_message(user_input):
                     st.session_state.message_hashes.add(assistant_hash)
                     chat_db.add_message("assistant", translated_text)
                 
-                # Об��овляем количество генераций
+                # Обновляем количество генераций
                 update_remaining_generations(st.session_state.username, -1)
                 st.rerun()
                 

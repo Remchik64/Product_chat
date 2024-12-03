@@ -124,24 +124,8 @@ def submit_question():
     # Добавляем индикатор загрузки
     with st.spinner('Отправляем ваш запрос...'):
         try:
-            # Получаем настройки контекста для основного чата
-            settings = st.session_state.get(MAIN_CHAT_SETTINGS_KEY, {
-                "use_context": True,
-                "context_messages": 10
-            })
-            
-            # Получаем контекст для сообщения с учетом настроек
-            if settings["use_context"]:
-                enhanced_message = context_manager.get_context(
-                    st.session_state.username,
-                    user_input,
-                    last_n_messages=settings["context_messages"]
-                )
-            else:
-                enhanced_message = user_input
-            
             payload = {
-                "question": enhanced_message
+                "question": user_input
             }
             response = requests.post(
                 st.secrets["flowise"]["api_url"],
@@ -183,16 +167,20 @@ def submit_question():
             # Добавляем сообщения и обновляем интерфейс
             if user_hash not in st.session_state.message_hashes:
                 st.session_state.message_hashes.add(user_hash)
-                display_user_message(user_input)
+                user_avatar = get_user_profile_image(st.session_state.username)
+                with st.chat_message("user", avatar=user_avatar):
+                    st.write(user_input)
                 chat_db.add_message("user", user_input)
 
             if assistant_hash not in st.session_state.message_hashes:
                 st.session_state.message_hashes.add(assistant_hash)
-                display_assistant_message(translated_text)
+                with st.chat_message("assistant", avatar=assistant_avatar):
+                    st.write(translated_text)
                 chat_db.add_message("assistant", translated_text)
 
-            # Очищаем поле ввода
+            # Очищаем поле ввода ТОЛЬКО после успешного получения ответа
             st.session_state.user_input = ""
+            st.rerun()
             
         except requests.exceptions.Timeout:
             st.error("Превышено время ожидания ответа от сервера")
@@ -312,14 +300,13 @@ def main():
         "context_messages": context_messages if use_context else 10
     })
 
-    # Поле ввода с формой в основной части
-    with st.form(key='question_form', clear_on_submit=True):
+    # Изменяем форму ввода
+    with st.form(key='question_form', clear_on_submit=False):  # Изменено на False
         st.text_area("Введите ваш вопрос", key="user_input", height=100)
         submit_button = st.form_submit_button("Отправить")
 
     if submit_button:
         submit_question()
-        st.rerun()
 
     st.write(f"Streamlit version: {st.__version__}")
 
