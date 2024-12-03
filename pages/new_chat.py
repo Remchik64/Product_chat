@@ -322,9 +322,12 @@ def submit_message(user_input):
         return
         
     if remaining_generations <= 0:
-        st.error("У вас закончились генераций. Пжалуйста, активируйте новый токен.")
+        st.error("У вас закончились генераций. Пожалуйста, активируйте новый токен.")
         return
         
+    # Получаем ID текущего чата
+    current_chat_id = st.session_state.current_chat_flow['id']
+    
     # Сохраняем и отображаем сообщение пользователя
     user_hash = get_message_hash("user", user_input)
     if "message_hashes" not in st.session_state:
@@ -340,19 +343,22 @@ def submit_message(user_input):
     with st.chat_message("assistant", avatar=assistant_avatar):
         with st.spinner('Получаем ответ...'):
             try:
-                # Получаем контекст для сообщения
+                # Инициализируем менеджер контекста для текущего чата
+                chat_context_manager = ContextManager()
+                
+                # Получаем контекст из истории текущего чата
                 if use_context:
-                    enhanced_message = context_manager.get_context(
-                        st.session_state.username,
-                        user_input,
+                    enhanced_message = chat_context_manager.get_context(
+                        username=st.session_state.username,
+                        message=user_input,
+                        flow_id=current_chat_id,  # Передаем ID текущего чата
                         last_n_messages=context_messages
                     )
                 else:
                     enhanced_message = user_input
                 
                 # Формируем URL с использованием ID текущего чата
-                chat_id = st.session_state.current_chat_flow['id']
-                api_url = f"{st.secrets['flowise']['base_url']}/api/v1/prediction/{chat_id}"
+                api_url = f"{st.secrets['flowise']['base_url']}/api/v1/prediction/{current_chat_id}"
                 
                 payload = {
                     "question": enhanced_message
