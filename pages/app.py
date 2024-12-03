@@ -302,7 +302,7 @@ def main():
     # Настройки контекста в боковой панели
     st.sidebar.title("Настройки контекста для истории")
 
-    # Инициализаци�� настроек в session_state если их нет
+    # Инициализаци настроек в session_state если их нет
     if MAIN_CHAT_SETTINGS_KEY not in st.session_state:
         st.session_state[MAIN_CHAT_SETTINGS_KEY] = {
             "use_context": True,
@@ -332,12 +332,23 @@ def main():
         "context_messages": context_messages if use_context else 10
     })
 
-    # Форма ввода
-    with st.form(key='question_form', clear_on_submit=True):
-        user_input = st.text_area("Введите ваш вопрос", key="user_input", height=100)
-        submit_button = st.form_submit_button("Отправить")
+    # Создаем контейнер для поля ввода
+    input_container = st.container()
 
-    if submit_button and user_input:  # Проверяем наличие текста
+    # Поле ввода с возможностью растягивания
+    user_input = st.text_area(
+        "Введите ваше сообщение",
+        height=100,
+        key="message_input",
+        placeholder="Введите текст сообщения здесь..."  
+    )
+
+    # Кнопка отправки внизу
+    send_button = st.button("Отправить", key="send_message", use_container_width=True)
+
+    # Отправка сообщения при нажатии кнопки или Ctrl+Enter
+    if send_button or (user_input and user_input.strip() != "" and st.session_state.get('_last_input') != user_input):
+        st.session_state['_last_input'] = user_input
         submit_question()
 
     st.write(f"Streamlit version: {st.__version__}")
