@@ -1,5 +1,5 @@
 import streamlit as st
-from utils.utils import generate_and_save_token
+from utils.utils import generate_and_save_token, get_data_file_path
 from utils.page_config import setup_pages
 import os
 import json
@@ -28,7 +28,7 @@ chat_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'chat')
 os.makedirs(chat_dir, exist_ok=True)
 
 # Проверяем существование файла
-keys_file = os.path.join(chat_dir, 'access_keys.json')
+keys_file = get_data_file_path('access_keys.json')
 if not os.path.exists(keys_file):
     with open(keys_file, 'w') as f:
         json.dump({"keys": [], "generations": {}}, f)

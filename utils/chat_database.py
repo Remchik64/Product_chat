@@ -1,11 +1,11 @@
 from tinydb import TinyDB, Query
 import os
 from datetime import datetime
+from utils.utils import get_data_file_path
 
 class ChatDatabase:
-    def __init__(self, username):
-        self.db_path = f'chat_history_{username}.json'
-        self.db = TinyDB(self.db_path)
+    def __init__(self, chat_id):
+        self.db = TinyDB(get_data_file_path(f'chat_history_{chat_id}.json'))
         
     def add_message(self, role, content):
         self.db.insert({

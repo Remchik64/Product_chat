@@ -1,6 +1,6 @@
 import streamlit as st
 from streamlit_extras.switch_page_button import switch_page
-from utils.utils import load_access_keys, remove_used_key, format_database
+from utils.utils import load_access_keys, remove_used_key, format_database, get_data_file_path
 from tinydb import TinyDB, Query
 from utils.page_config import PAGE_CONFIG, setup_pages
 import os
@@ -18,7 +18,7 @@ st.set_page_config(
 setup_pages()
 
 # Инициализация базы данных
-user_db = TinyDB('user_database.json')
+user_db = TinyDB(get_data_file_path('user_database.json'))
 User = Query()
 
 # Проверка аутентификации

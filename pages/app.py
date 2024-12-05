@@ -8,7 +8,7 @@ from PIL import Image
 import streamlit.components.v1 as components
 from tinydb import TinyDB, Query
 User = Query()  # Добавьте эту строку после импорта Query
-from utils.utils import update_remaining_generations
+from utils.utils import update_remaining_generations, get_data_file_path
 from utils.chat_database import ChatDatabase
 from utils.page_config import PAGE_CONFIG, setup_pages
 from typing import List
@@ -49,7 +49,7 @@ if 'username' not in st.session_state:
     st.stop()
 
 # Проверяем наличие активного токена и доступа
-user_db = TinyDB('user_database.json')
+user_db = TinyDB(get_data_file_path('user_database.json'))
 user_data = user_db.search(User.username == st.session_state.username)
 
 if user_data:

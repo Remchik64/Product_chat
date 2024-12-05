@@ -4,7 +4,7 @@ import json
 import os
 from PIL import Image
 import hashlib
-from utils.utils import verify_user_access, update_remaining_generations
+from utils.utils import verify_user_access, update_remaining_generations, get_data_file_path
 from utils.chat_database import ChatDatabase
 from tinydb import TinyDB, Query
 from googletrans import Translator
@@ -160,7 +160,7 @@ def delete_chat_flow(username, flow_id):
     return True
 
 # Инициализация базы данных
-user_db = TinyDB('user_database.json')
+user_db = TinyDB(get_data_file_path('user_database.json'))
 User = Query()
 
 st.title("Личный помощник")

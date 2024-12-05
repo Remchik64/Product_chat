@@ -4,7 +4,7 @@ from tinydb import TinyDB, Query
 import os
 from PIL import Image
 from utils.page_config import setup_pages, PAGE_CONFIG
-from utils.utils import format_database
+from utils.utils import format_database, get_data_file_path
 from utils.security import hash_password, is_strong_password, verify_password, check_login_attempts, increment_login_attempts, reset_login_attempts
 from datetime import datetime
 
@@ -15,7 +15,7 @@ st.set_page_config(page_title="Вход/Регистрация", layout="wide", 
 setup_pages()
 
 # Инициализация базы данных пользователей
-user_db = TinyDB('user_database.json')
+user_db = TinyDB(get_data_file_path('user_database.json'))
 
 # Убедимся, что папка для хранения изображений профиля существует
 PROFILE_IMAGES_DIR = 'profile_images'

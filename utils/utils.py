@@ -8,6 +8,16 @@ from streamlit.runtime.scriptrunner import add_script_run_ctx
 from streamlit import switch_page
 import streamlit as st
 
+# Определяем базовый путь для файлов данных
+DATA_DIR = "/data" if os.path.exists("/data") else "."
+
+# Функция для получения правильного пути к файлу
+def get_data_file_path(filename):
+    """
+    Возвращает полный путь к файлу данных с учетом окружения
+    """
+    return os.path.join(DATA_DIR, filename)
+
 def ensure_directories():
     """Проверка и создание необходимых директорий"""
     directories = ['chat', 'profile_images', '.streamlit']
@@ -20,7 +30,7 @@ def ensure_directories():
 ensure_directories()
 
 # Инициализация базы данных
-user_db = TinyDB('user_database.json')
+user_db = TinyDB(get_data_file_path('user_database.json'))
 User = Query()
 
 def check_token_status(username):
@@ -172,9 +182,9 @@ def verify_user_access():
 
 def format_database():
     try:
-        with open('user_database.json', 'r', encoding='utf-8') as f:
+        with open(get_data_file_path('user_database.json'), 'r', encoding='utf-8') as f:
             data = json.load(f)
-        with open('user_database.json', 'w', encoding='utf-8') as f:
+        with open(get_data_file_path('user_database.json'), 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=4)
         return True
     except Exception as e:

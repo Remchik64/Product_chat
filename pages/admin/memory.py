@@ -5,6 +5,7 @@ import os
 from tinydb import TinyDB, Query
 import json
 from utils.chat_database import ChatDatabase
+from utils.utils import get_data_file_path
 
 # Настраиваем страницы
 setup_pages()
@@ -109,7 +110,7 @@ except Exception as e:
 
 def get_chat_flows(username):
     """Получает список чат-потоков пользователя"""
-    user_db = TinyDB('user_database.json')
+    user_db = TinyDB(get_data_file_path('user_database.json'))
     User = Query()
     user = user_db.get(User.username == username)
     if user and 'chat_flows' in user:
@@ -220,7 +221,7 @@ def inject_context(original_message, context, chat_name=None):
 st.subheader("Тестирование анализа истории чата")
 
 # Выбор пользователя
-user_db = TinyDB('user_database.json')
+user_db = TinyDB(get_data_file_path('user_database.json'))
 users = [user['username'] for user in user_db.all()]
 selected_user = st.selectbox("Выберите пользователя:", users)
 

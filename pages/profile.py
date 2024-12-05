@@ -3,7 +3,7 @@ from streamlit_extras.switch_page_button import switch_page
 from tinydb import TinyDB, Query
 import os
 from PIL import Image
-from utils.utils import check_token_status, format_database, update_remaining_generations
+from utils.utils import check_token_status, format_database, update_remaining_generations, get_data_file_path
 from utils.page_config import setup_pages, PAGE_CONFIG
 import hashlib
 import io
@@ -53,7 +53,7 @@ chat_bot_html = """
 <script type="module">
     import Chatbot from "https://cdn.jsdelivr.net/npm/flowise-embed/dist/web.js"
     Chatbot.init({
-        chatflowid: "fc24280f-f41c-4121-b1fb-c41176a726e9",
+        chatflowid: "28d13206-3a4d-4ef8-80e6-50b671b5766c",
         apiHost: "https://flowise-renataraev64.amvera.io",
         chatflowConfig: {
             // topK: 2
@@ -110,7 +110,7 @@ chat_bot_html = """
                     userNameColor: "#ffffff"
                 },
                 textInput: {
-                    placeholder: 'Введите ваш вопрос',
+                    placeholder: ' Ваш вопрос',
                     backgroundColor: '#ffffff',
                     textColor: '#303235',
                     sendButtonColor: '#000000',
@@ -305,7 +305,7 @@ if __name__ == "__main__":
         st.stop()
 
     # Инициализация базы данных пользователей
-    user_db = TinyDB('user_database.json')
+    user_db = TinyDB(get_data_file_path('user_database.json'))
     User = Query()
     user_data = user_db.search(User.username == st.session_state.username)
 
