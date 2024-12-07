@@ -82,7 +82,7 @@ chat_bot_html = """
             },
             chatWindow: {
                 showTitle: true,
-                title: 'Поддержка/Советы',
+                title: 'Поддержка',
                 titleAvatarSrc: '',
                 showAgentMessages: true,
                 welcomeMessage: 'Привет! Я помогу вам с вопросами.',
@@ -287,7 +287,7 @@ def main():
 
 
     # Чат-бот остается в боковом меню без изменений
-    st.sidebar.markdown("### Чат поддержки ")
+    st.sidebar.markdown( "Чат поддержки(НАХОДИТСЯ В РАЗРАБОТКЕ!) ")
     with st.sidebar:
         components.html(
             chat_bot_html,
