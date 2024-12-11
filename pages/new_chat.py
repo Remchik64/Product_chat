@@ -273,7 +273,7 @@ if st.sidebar.button("Очистить текущий чат"):
 if st.sidebar.button("🗑️ Удалить текущий чат", type="secondary", key="sidebar_delete_chat"):
     if 'current_chat_flow' in st.session_state:
         if delete_chat_flow(st.session_state.username, st.session_state.current_chat_flow['id']):
-            st.sidebar.success("Чат успешно удален!")
+            st.sidebar.success("��ат успешно удален!")
             # Очищаем текущий чат из session_state
             if 'current_chat_flow' in st.session_state:
                 del st.session_state.current_chat_flow

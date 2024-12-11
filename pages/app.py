@@ -124,7 +124,7 @@ def submit_question():
     # Инициализируем базу данных для этого конкретного чата
     chat_db = ChatDatabase(f"{st.session_state.username}_main_chat")
     
-    user_input = st.session_state.get('user_input', '')
+    user_input = st.session_state.get('message_input', '')
     if not user_input:
         st.warning("Пожалуйста, введите ваш вопрос.")
         return
