@@ -60,7 +60,7 @@ if user_data:
     st.session_state.remaining_generations = user_data.get('remaining_generations', 0)
     st.session_state.access_granted = bool(user_data.get('active_token'))
     
-    # Проверяем токен и статус доступа
+    # Проверяем токен  статус доступа
     if not st.session_state.active_token:
         st.warning("Пожалуйста, введите ключ доступа")
         switch_page("Ввод/Покупка токена")
@@ -100,6 +100,7 @@ def get_user_profile_image(username):
     return "👤"  # Возвращаем эмодзи, если изображение не найдено
 
 def get_message_hash(role, content):
+    """Создает уникальный хэш для сообщения"""
     return hashlib.md5(f"{role}:{content}".encode()).hexdigest()
 
 def display_remaining_generations():
@@ -129,7 +130,7 @@ def submit_question():
         st.warning("Пожалуйста, введите ваш вопрос.")
         return
     
-    # Проверяем количество оставшихся генераций
+    # Проверяем количество осташихся генераций
     if st.session_state.remaining_generations <= 0:
         st.error("У вас закончились генерации. Пожалуйста, активируйте новый токен.")
         switch_page("Вход/Регистрация")
@@ -263,14 +264,30 @@ def verify_user_access():
 
 
 
-def display_assistant_message(content):
+def display_assistant_message(content, message_hash):
     with st.chat_message("assistant", avatar=assistant_avatar):
-        st.write(content)
+        col1, col2 = st.columns([0.95, 0.05])
+        with col1:
+            st.write(content)
+        with col2:
+            if st.button("🗑️", key=f"del_{message_hash}", help="Удалить сообщение"):
+                chat_db.delete_message(message_hash)
+                if "message_hashes" in st.session_state:
+                    st.session_state.message_hashes.remove(message_hash)
+                st.rerun()
 
-def display_user_message(content):
+def display_user_message(content, message_hash):
     user_avatar = get_user_profile_image(st.session_state.username)
     with st.chat_message("user", avatar=user_avatar):
-        st.write(content)
+        col1, col2 = st.columns([0.95, 0.05])
+        with col1:
+            st.write(content)
+        with col2:
+            if st.button("🗑️", key=f"del_{message_hash}", help="Удалить сообщение"):
+                chat_db.delete_message(message_hash)
+                if "message_hashes" in st.session_state:
+                    st.session_state.message_hashes.remove(message_hash)
+                st.rerun()
 
 def main():
     # Инициализируем базу данных чата
@@ -281,10 +298,11 @@ def main():
     
     # Отображаем историю чата
     for message in chat_history:
+        message_hash = get_message_hash(message["role"], message["content"])
         if message["role"] == "assistant":
-            display_assistant_message(message["content"])
+            display_assistant_message(message["content"], message_hash)
         else:
-            display_user_message(message["content"])
+            display_user_message(message["content"], message_hash)
     
     st.title("Бизнес-Идея")
 
@@ -292,9 +310,30 @@ def main():
     display_remaining_generations()
 
     # Добавляем кнопк очистки чата
-    if st.sidebar.button("Очистить чат"):
-        chat_db.clear_history()
-        st.rerun()
+    if "main_clear_chat_confirm" not in st.session_state:
+        st.session_state.main_clear_chat_confirm = False
+
+    # Заменяем простую кнопку очистки на кнопку с подтверждением
+    if st.sidebar.button(
+        "Очистить чат" if not st.session_state.main_clear_chat_confirm else "⚠️ Нажмите еще раз для подтверждения",
+        type="secondary" if not st.session_state.main_clear_chat_confirm else "primary",
+        key="main_clear_chat_button"
+    ):
+        if st.session_state.main_clear_chat_confirm:
+            # Выполняем очистку
+            chat_db.clear_history()
+            st.session_state.main_clear_chat_confirm = False
+            st.rerun()
+        else:
+            # Первое нажатие - показываем предупреждение
+            st.session_state.main_clear_chat_confirm = True
+            st.sidebar.warning("⚠️ Вы уверены? Это действие нельзя отменить!")
+
+    # Добавляем кнопку отмены, если показано предупреждение
+    if st.session_state.main_clear_chat_confirm:
+        if st.sidebar.button("Отмена", key="main_cancel_clear"):
+            st.session_state.main_clear_chat_confirm = False
+            st.rerun()
 
     # Добавляем разделитель в боковом меню
     st.sidebar.markdown("---")
@@ -309,7 +348,7 @@ def main():
             "context_messages": 10
         }
 
-    # Нстройки контекста
+    # Нстройк контекста
     use_context = st.sidebar.checkbox(
         "Использовать контекст истории",
         value=st.session_state[MAIN_CHAT_SETTINGS_KEY]["use_context"],
@@ -323,7 +362,7 @@ def main():
             max_value=30,
             value=st.session_state[MAIN_CHAT_SETTINGS_KEY]["context_messages"],
             key=f"{MAIN_CHAT_SETTINGS_KEY}_slider",
-            help="Количество последних сообщений, которые будут анализироваться для создания контекста."
+            help="Количество последних сообщений, ко��орые будут а��ализироваться для создания контекста."
         )
 
     # Обновляем настройки в session_state
@@ -335,6 +374,9 @@ def main():
     # Создаем контейнер для поля ввода
     input_container = st.container()
 
+    def clear_input():
+        st.session_state.message_input = ""
+
     # Поле ввода с возможностью растягивания
     user_input = st.text_area(
         "Введите ваше сообщение",
@@ -343,10 +385,17 @@ def main():
         placeholder="Введите текст сообщения здесь..."  
     )
 
-    # Кнопка отправки внизу
-    send_button = st.button("Отправить", key="send_message", use_container_width=True)
+    # Создаем три колонки для кнопок
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        send_button = st.button("Отправить", key="send_message", use_container_width=True)
+    with col2:
+        clear_button = st.button("Очистить", key="clear_input", on_click=clear_input, use_container_width=True)
+    with col3:
+        cancel_button = st.button("Отменить", key="cancel_request", use_container_width=True)
 
-    # Отправка сообщения при нажатии кнопки или Ctrl+Enter
+    # Отправка сооб��ения при нажат��и кнопки или Ctrl+Enter
     if send_button or (user_input and user_input.strip() != "" and st.session_state.get('_last_input') != user_input):
         st.session_state['_last_input'] = user_input
         submit_question()

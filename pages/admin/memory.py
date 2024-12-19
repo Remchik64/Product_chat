@@ -100,12 +100,20 @@ with st.sidebar.expander("Настройки генерации", expanded=True)
         })
         st.success("Настройки генерации сохранены!")
 
-# Инициализация Together API с ключом из secrets
-try:
-    os.environ["TOGETHER_API_KEY"] = st.secrets["together"]["api_key"]
-    together.api_key = st.secrets["together"]["api_key"]  # Изменена инициализация
-except Exception as e:
-    st.error(f"Ошибка инициализации Together API: {str(e)}")
+# Кэширование инициализации Together API
+@st.cache_resource
+def initialize_together_api():
+    try:
+        os.environ["TOGETHER_API_KEY"] = st.secrets["together"]["api_key"]
+        together.api_key = st.secrets["together"]["api_key"]
+        return together
+    except Exception as e:
+        st.error(f"Ошибка инициализации Together API: {str(e)}")
+        return None
+
+# В основном коде
+together_api = initialize_together_api()
+if not together_api:
     st.stop()
 
 def get_chat_flows(username):
@@ -174,7 +182,7 @@ def analyze_chat_history(username, chat_id=None, last_n_messages=10):
         settings = st.session_state.model_settings
         
         # Запрос к модели для анализа
-        response = together.Complete.create(
+        response = together_api.Complete.create(
             model=settings["model"],
             prompt=analysis_prompt,
             max_tokens=2048,  # Увеличиваем для более подробного анализа

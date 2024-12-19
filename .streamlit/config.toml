@@ -1,7 +1,8 @@
 [theme]
 base="dark"
+primaryColor="#48bba0"
 secondaryBackgroundColor="#32333f"
-textColor="#fffcfc"
+textColor="#d6d0d0"
 font="monospace"
 
 [ui]
@@ -17,4 +18,5 @@ fastReruns = true
 
 [client]
 showSidebarNavigation = true
+
 

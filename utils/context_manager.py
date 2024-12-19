@@ -6,40 +6,43 @@ from utils.chat_database import ChatDatabase
 from tinydb import TinyDB, Query
 import time
 
+# Используем cache_resource для кэширования инициализации Together API
+@st.cache_resource
+def initialize_together_api():
+    os.environ["TOGETHER_API_KEY"] = st.secrets["together"]["api_key"]
+    together.api_key = st.secrets["together"]["api_key"]
+    return together
+
 class ContextManager:
     def __init__(self):
-        # Инициализируем Together API для анализа контекста
-        os.environ["TOGETHER_API_KEY"] = st.secrets["together"]["api_key"]
-        together.api_key = st.secrets["together"]["api_key"]
+        # Инициализируем Together API через кэшированную функцию
+        self.together_api = initialize_together_api()
         
-    def get_context(self, username, message, flow_id=None, last_n_messages=10):
-        """Получает контекст для сообщения на основе истории конкретного чата"""
-        # Определяем правильный ID базы данных чата
-        chat_db_name = None
-        
-        if flow_id:
-            # Для new_chat.py - используем ID конкретного чата
-            chat_db_name = f"{username}_{flow_id}"
-        else:
-            # Для app.py - используем main_chat
-            chat_db_name = f"{username}_main_chat"
-            
-        # Инициализируем базу данных для конкретного чата
+    def get_context(self, username, message, flow_id=None, context_range=(1, 10)):
+        """
+        Получает контекст для сообщения на основе истории конкретного чата
+        с учетом указанного диапазона сообщений
+        """
+        chat_db_name = f"{username}_{flow_id}" if flow_id else f"{username}_main_chat"
         chat_db = ChatDatabase(chat_db_name)
         history = chat_db.get_history()
         
         if not history:
-            print(f"История чата {chat_db_name} пуста")
             return message
-            
+        
         try:
-            # Форматируем историю в структурированный диалог
+            # Получаем сообщения из указанного диапазона
+            start_idx = max(0, context_range[0] - 1)
+            end_idx = min(len(history), context_range[1])
+            
+            # Форматируем только сообщения из выбранного диапазона
             formatted_history = []
-            for msg in history[-last_n_messages:]:  # Берем только последние n сообщений
+            for msg in history[start_idx:end_idx]:
                 role = "Assistant" if msg['role'] == "assistant" else "User"
                 formatted_history.append(f"{role}: {msg['content']}")
             
             history_text = "\n".join(formatted_history)
+            
             print(f"Анализ истории для чата {chat_db_name}")
             
             # Создаем промпт для анализа контекста
@@ -72,7 +75,7 @@ class ContextManager:
             
             for attempt in range(max_retries):
                 try:
-                    response = together.Complete.create(
+                    response = self.together_api.Complete.create(
                         model="meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
                         prompt=context_prompt,
                         max_tokens=2048,

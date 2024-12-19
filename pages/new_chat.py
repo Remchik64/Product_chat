@@ -44,6 +44,36 @@ if os.path.exists(ASSISTANT_ICON_PATH):
 else:
     assistant_avatar = "🤖"
 
+def get_message_hash(role, content):
+    """Создает уникальный хэш для сообщения"""
+    return hashlib.md5(f"{role}:{content}".encode()).hexdigest()
+
+def display_message_with_delete(message, role):
+    """Отображает сообщение с кнопкой удаления и номером"""
+    message_hash = get_message_hash(role, message["content"])
+    avatar = assistant_avatar if role == "assistant" else get_user_profile_image(st.session_state.username)
+    
+    # Получаем номер сообщения из его индекса в истории
+    current_chat_db = ChatDatabase(f"{st.session_state.username}_{st.session_state.current_chat_flow['id']}")
+    history = current_chat_db.get_history()
+    message_number = history.index(message) + 1  # +1 для человекочитаемой нумерации
+    
+    with st.chat_message(role, avatar=avatar):
+        col1, col2, col3 = st.columns([0.05, 0.90, 0.05])  # Изменили пропорции колонок
+        
+        with col1:
+            st.write(f"#{message_number}")  # Номер сообщения
+            
+        with col2:
+            st.markdown(message["content"])
+            
+        with col3:
+            if st.button("🗑️", key=f"del_{message_hash}", help="Удалить сообщение"):
+                current_chat_db.delete_message(message_hash)
+                if "message_hashes" in st.session_state:
+                    st.session_state.message_hashes.remove(message_hash)
+                st.rerun()
+
 def get_user_profile_image(username):
     for ext in ['png', 'jpg', 'jpeg']:
         image_path = os.path.join(PROFILE_IMAGES_DIR, f"{username}.{ext}")
@@ -53,9 +83,6 @@ def get_user_profile_image(username):
             except Exception as e:
                 return "👤"
     return "👤"
-
-def get_message_hash(role, content):
-    return hashlib.md5(f"{role}:{content}".encode()).hexdigest()
 
 def translate_text(text):
     try:
@@ -185,10 +212,10 @@ st.sidebar.title("Настройки контекста для истории")
 if NEW_CHAT_SETTINGS_KEY not in st.session_state:
     st.session_state[NEW_CHAT_SETTINGS_KEY] = {
         "use_context": True,
-        "context_messages": 10
+        "context_range": (1, 10)  # Устанавливаем начальное значение диапазона
     }
 
-# Настройки контекста для нового чата
+# Настройки контекста
 use_context = st.sidebar.checkbox(
     "Использовать контекст истории",
     value=st.session_state[NEW_CHAT_SETTINGS_KEY]["use_context"],
@@ -196,19 +223,44 @@ use_context = st.sidebar.checkbox(
 )
 
 if use_context:
-    context_messages = st.sidebar.slider(
-        "Количество сообщений для анализа",
-        min_value=3,
-        max_value=30,
-        value=st.session_state[NEW_CHAT_SETTINGS_KEY]["context_messages"],
-        key=f"{NEW_CHAT_SETTINGS_KEY}_slider",
-        help="Количество последних сообщений, которые будут анализироваться для создания контекста"
-    )
-# Обновляем настройки в session_state
-st.session_state[NEW_CHAT_SETTINGS_KEY].update({
-    "use_context": use_context,
-    "context_messages": context_messages if use_context else 10
-})
+    # Получаем количество сообщений в текущем чате
+    if 'current_chat_flow' in st.session_state:  # Проверяем наличие текущего чата
+        current_chat_db = ChatDatabase(f"{st.session_state.username}_{st.session_state.current_chat_flow['id']}")
+        history = current_chat_db.get_history()
+        max_messages = len(history) if history else 30
+        
+        # Получаем текущий диапазон из session_state или используем значение по умолчанию
+        current_range = st.session_state[NEW_CHAT_SETTINGS_KEY].get("context_range", (1, 10))
+        
+        context_range = st.sidebar.slider(
+            "Диапазон сообщений для анализа:",
+            min_value=1,
+            max_value=max(30, max_messages),
+            value=current_range,  # Используем текущее значение
+            step=1,
+            key=f"{NEW_CHAT_SETTINGS_KEY}_range",
+            help="Выберите диапазон сообщений для анализа контекста"
+        )
+
+        # Показываем выбранный диапазон с дополнительной информацией
+        st.sidebar.info(
+            f"Анализируются сообщения с #{context_range[0]} по #{context_range[1]}\n\n"
+            "💡 Номера сообщений отображаются слева от каждого сообщения в чате"
+        )
+
+        # Обновляем настройки в session_state
+        st.session_state[NEW_CHAT_SETTINGS_KEY].update({
+            "use_context": use_context,
+            "context_range": context_range
+        })
+    else:
+        st.sidebar.warning("Создайте новый чат для настройки контекста")
+else:
+    # Если контекст выключен, сохраняем значение по умолчанию
+    st.session_state[NEW_CHAT_SETTINGS_KEY].update({
+        "use_context": False,
+        "context_range": (1, 10)
+    })
 
 # Добавляем разделитель
 st.sidebar.markdown("---")
@@ -242,8 +294,16 @@ if chat_flows:
         chat_flows[0]
     )
     
-    st.session_state.current_chat_flow = selected_flow
-    chat_db = ChatDatabase(f"{st.session_state.username}_{selected_flow['id']}")
+    # Проверяем, изменился ли выбранный чат
+    if ('current_chat_flow' not in st.session_state or 
+        st.session_state.current_chat_flow['id'] != selected_flow['id']):
+        # Обновляем текущий чат
+        st.session_state.current_chat_flow = selected_flow
+        # Очищаем историю сообщений предыдущего чата
+        if "message_hashes" in st.session_state:
+            del st.session_state.message_hashes
+        # Перезагружаем страницу для отображения новой истории
+        st.rerun()
 
 # Создание нового чат-потока
 st.sidebar.markdown("---")
@@ -251,7 +311,7 @@ with st.sidebar.expander("Создать новый чат"):
     new_flow_name = st.text_input("Название чата:")
     new_flow_id = st.text_input(
         "ID чат-потока:",
-        help="Например: 28d13206-3a4d-4ef8-80e6-50b671b5766c"
+        help="Введите например: 28d13206-3a4d-4ef8-80e6-50b671b5766c или закжите сборку чата в https://t.me/startintellect"
     )
     
     if st.button("Создать") and new_flow_id:
@@ -264,24 +324,53 @@ with st.sidebar.expander("Создать новый чат"):
             st.success("Новый чат создан!")
             st.rerun()
 
-# Кнопка очистки текущего чата
-if st.sidebar.button("Очистить текущий чат"):
-    if 'current_chat_flow' in st.session_state:
-        clear_chat_history(st.session_state.username, st.session_state.current_chat_flow['id'])
+# Добавляем состояния подтверждения с уникальными ключами
+if "new_chat_clear_confirm" not in st.session_state:  # Изменили ключ
+    st.session_state.new_chat_clear_confirm = False   # Изменили ключ
+if "new_chat_delete_confirm" not in st.session_state: # Изменили ключ
+    st.session_state.new_chat_delete_confirm = False  # Изменили ключ
 
-# Кнопка удаления текущего чта
-if st.sidebar.button("🗑️ Удалить текущий чат", type="secondary", key="sidebar_delete_chat"):
-    if 'current_chat_flow' in st.session_state:
-        if delete_chat_flow(st.session_state.username, st.session_state.current_chat_flow['id']):
-            st.sidebar.success("��ат успешно удален!")
-            # Очищаем текущий чат из session_state
-            if 'current_chat_flow' in st.session_state:
-                del st.session_state.current_chat_flow
-            if 'message_hashes' in st.session_state:
-                del st.session_state.message_hashes
+# Заменяем кнопку очистки чата
+if st.sidebar.button(
+    "Очистить текущий чат" if not st.session_state.new_chat_clear_confirm else "⚠️ Нажмите еще раз для подтверждения",
+    type="secondary" if not st.session_state.new_chat_clear_confirm else "primary",
+    key="new_chat_clear_button"  # Изменили ключ
+):
+    if st.session_state.new_chat_clear_confirm:
+        if 'current_chat_flow' in st.session_state:
+            clear_chat_history(st.session_state.username, st.session_state.current_chat_flow['id'])
+            st.session_state.new_chat_clear_confirm = False  # Изменили ключ
             st.rerun()
-        else:
-            st.sidebar.error("Ошибка при удалении чата")
+    else:
+        st.session_state.new_chat_clear_confirm = True  # Изменили ключ
+        st.sidebar.warning("⚠️ Вы уверены? Это действие нельзя отменить!")
+
+# Заменяем кнопку удаления чата
+if st.sidebar.button(
+    "🗑️ Удалить текущий чат" if not st.session_state.new_chat_delete_confirm else "⚠️ Подтвердите удаление чата",
+    type="secondary" if not st.session_state.new_chat_delete_confirm else "primary",
+    key="new_chat_delete_button"  # Изменили ключ
+):
+    if st.session_state.new_chat_delete_confirm:
+        if 'current_chat_flow' in st.session_state:
+            if delete_chat_flow(st.session_state.username, st.session_state.current_chat_flow['id']):
+                st.sidebar.success("Чат успешно удален!")
+                if 'current_chat_flow' in st.session_state:
+                    del st.session_state.current_chat_flow
+                if 'message_hashes' in st.session_state:
+                    del st.session_state.message_hashes
+                st.session_state.new_chat_delete_confirm = False  # Изменили ключ
+                st.rerun()
+    else:
+        st.session_state.new_chat_delete_confirm = True  # Изменили ключ
+        st.sidebar.warning("⚠️ Вы уверены, что хотите удалить этот чат? Это действие нельзя отменить!")
+
+# Добавляем кнопки отмены для обоих действий
+if st.session_state.new_chat_clear_confirm or st.session_state.new_chat_delete_confirm:  # Изменили ключи
+    if st.sidebar.button("Отмена", key="new_chat_cancel_action"):  # Изменили ключ
+        st.session_state.new_chat_clear_confirm = False   # Изменили ключ
+        st.session_state.new_chat_delete_confirm = False  # Изменили ключ
+        st.rerun()
 
 # Проверяем наличие текущего чат-потока
 if 'current_chat_flow' not in st.session_state:
@@ -305,17 +394,15 @@ if 'current_chat_flow' in st.session_state:
     st.markdown(f"### 💬 {chat_name}")
     st.markdown("---")
 
-# Отображение истории чата
-chat_history = chat_db.get_history()
-for message in chat_history:
-    if message["role"] == "assistant":
-        with st.chat_message("assistant", avatar=assistant_avatar):
-            st.markdown(message["content"])
-    else:
-        with st.chat_message("user", avatar=get_user_profile_image(st.session_state.username)):
-            st.markdown(message["content"])
+    # Инициализируем базу данных для текущего чата
+    current_chat_db = ChatDatabase(f"{st.session_state.username}_{st.session_state.current_chat_flow['id']}")
+    
+    # Отображение истории текущего чата
+    chat_history = current_chat_db.get_history()
+    for message in chat_history:
+        display_message_with_delete(message, message["role"])
 
-# Функция отправки сообщения
+# Функция отп��авки сообщения
 def submit_message(user_input):
     if not user_input:
         st.warning("Пожалуйста, введите сообщение")
@@ -331,7 +418,7 @@ def submit_message(user_input):
     # Создаем уникальный ключ для хранения истории этого чата
     chat_history_key = f"{st.session_state.username}_{current_chat_id}_history"
     
-    # Инициализируем базу данных для этого конкретного чата
+    # Инициализируем базу данных дл этого конкретного чата
     chat_db = ChatDatabase(f"{st.session_state.username}_{current_chat_id}")
     
     # Сохраняем и отображаем сообщение пользователя
@@ -345,6 +432,14 @@ def submit_message(user_input):
             st.markdown(user_input)
         chat_db.add_message("user", user_input)
     
+    # Получаем настройки контекста
+    settings = st.session_state.get(NEW_CHAT_SETTINGS_KEY, {
+        "use_context": True,
+        "context_range": (1, 10)
+    })
+    use_context = settings["use_context"]
+    context_range = settings["context_range"]
+    
     # Получаем и отображаем ответ от ассистента
     with st.chat_message("assistant", avatar=assistant_avatar):
         with st.spinner('Получаем ответ...'):
@@ -357,8 +452,8 @@ def submit_message(user_input):
                     enhanced_message = chat_context_manager.get_context(
                         username=st.session_state.username,
                         message=user_input,
-                        flow_id=current_chat_id,  # Передаем ID текущего чата
-                        last_n_messages=context_messages
+                        flow_id=current_chat_id,
+                        context_range=context_range  # Передаем диапазон
                     )
                 else:
                     enhanced_message = user_input
@@ -395,7 +490,7 @@ def submit_message(user_input):
                 # Переводим ответ
                 translated_text = translate_text(response_text)
                 
-                # Отображаем и сохраняем ответ
+                # О��ображаем и сохраняем ответ
                 st.markdown(translated_text)
                 
                 assistant_hash = get_message_hash("assistant", translated_text)
@@ -408,7 +503,7 @@ def submit_message(user_input):
                 st.rerun()
                 
             except requests.exceptions.ConnectionError:
-                st.error("Ошибка подключения к серверу. Проверьте подключение к интернету")
+                st.error("Ошибка подключения к серверу. Провеьте подключение к интернету")
             except requests.exceptions.Timeout:
                 st.error("Превышено время ожидания ответа")
             except requests.exceptions.RequestException:
@@ -419,6 +514,10 @@ def submit_message(user_input):
 # Создаем контейнер для поля ввода
 input_container = st.container()
 
+def clear_input():
+    if 'message_input' in st.session_state:
+        st.session_state.message_input = ""
+
 # Поле ввода с возможностью растягивания
 user_input = st.text_area(
     "Введите ваше сообщение",
@@ -427,8 +526,15 @@ user_input = st.text_area(
     placeholder="Введите текст сообщения здесь..."  
 )
 
-# Кнопка отправки внизу
-send_button = st.button("Отправить", key="send_message", use_container_width=True)
+# Создаем три колонки для кнопок
+col1, col2, col3 = st.columns(3)
+    
+with col1:
+    send_button = st.button("Отправить", key="send_message", use_container_width=True)
+with col2:
+    clear_button = st.button("Очистить", key="clear_input", on_click=clear_input, use_container_width=True)
+with col3:
+    cancel_button = st.button("Отменить", key="cancel_request", use_container_width=True)
 
 # Отправка сообщения при нажатии кнопки или Ctrl+Enter
 if send_button or (user_input and user_input.strip() != "" and st.session_state.get('_last_input') != user_input):
