@@ -362,7 +362,7 @@ def main():
             max_value=30,
             value=st.session_state[MAIN_CHAT_SETTINGS_KEY]["context_messages"],
             key=f"{MAIN_CHAT_SETTINGS_KEY}_slider",
-            help="Количество последних сообщений, ко��орые будут а��ализироваться для создания контекста."
+            help="Количество последних сообщений, которые будут анализироваться для создания контекста."
         )
 
     # Обновляем настройки в session_state
