@@ -119,24 +119,17 @@ def submit_question():
     use_context = settings["use_context"]
     context_messages = settings["context_messages"]
     
-    # Создаем уникальный ключ для хранения истории этого чата
-    chat_history_key = f"{st.session_state.username}_main_chat_history"
-    
-    # Инициализируем базу данных для этого конкретного чата
-    chat_db = ChatDatabase(f"{st.session_state.username}_main_chat")
-    
     user_input = st.session_state.get('message_input', '')
     if not user_input:
         st.warning("Пожалуйста, введите ваш вопрос.")
         return
     
-    # Проверяем количество осташихся генераций
+    # Проверяем количество оставшихся генераций
     if st.session_state.remaining_generations <= 0:
         st.error("У вас закончились генерации. Пожалуйста, активируйте новый токен.")
         switch_page("Вход/Регистрация")
         return
         
-    # Добавляем индикатор загрузки
     with st.spinner('Отправляем ваш запрос...'):
         try:
             # Инициализируем менеджер контекста для основного чата
@@ -147,8 +140,7 @@ def submit_question():
                 enhanced_message = chat_context_manager.get_context(
                     username=st.session_state.username,
                     message=user_input,
-                    flow_id=None,  # Явно указываем None для основного чата
-                    last_n_messages=context_messages
+                    flow_id=None  # Явно указываем None для основного чата
                 )
             else:
                 enhanced_message = user_input
@@ -157,10 +149,12 @@ def submit_question():
                 "question": enhanced_message
             }
             
+            # Отправляем запрос
             response = requests.post(
                 st.secrets["flowise"]["api_url"],
                 json=payload,
-                timeout=100
+                timeout=100,
+                headers={'Content-Type': 'application/json'}
             )
             
             # Проверяем статус ответа
@@ -172,20 +166,17 @@ def submit_question():
             response_text = output.get('text', '')
             
             if not response_text:
-                st.warning("Получен пустой ответ")
+                st.warning("Получен пустой ответ от API")
                 return
 
+            # Переводим ответ
             translated_text = translate_text(response_text)
             if not translated_text:
                 st.warning("Ошибка при переводе ответа")
                 return
 
             # Обновляем количество генераций
-            st.session_state.remaining_generations -= 1
-            user_db.update({
-                'remaining_generations': st.session_state.remaining_generations,
-                'token_generations': st.session_state.remaining_generations
-            }, User.username == st.session_state.username)
+            update_remaining_generations(st.session_state.username, -1)
             
             # Добавляем сообщения в чат
             user_hash = get_message_hash("user", user_input)
@@ -194,21 +185,23 @@ def submit_question():
             if "message_hashes" not in st.session_state:
                 st.session_state.message_hashes = set()
 
-            # Добавляем сообщения и обновляем интерфейс
+            # Сначала отображаем сообщения
             if user_hash not in st.session_state.message_hashes:
                 st.session_state.message_hashes.add(user_hash)
-                user_avatar = get_user_profile_image(st.session_state.username)
-                with st.chat_message("user", avatar=user_avatar):
-                    st.write(user_input)
                 chat_db.add_message("user", user_input)
+                with st.chat_message("user", avatar=get_user_profile_image(st.session_state.username)):
+                    st.write(user_input)
 
             if assistant_hash not in st.session_state.message_hashes:
                 st.session_state.message_hashes.add(assistant_hash)
+                chat_db.add_message("assistant", translated_text)
                 with st.chat_message("assistant", avatar=assistant_avatar):
                     st.write(translated_text)
-                chat_db.add_message("assistant", translated_text)
 
-            # Просто перезагружаем страницу после успешной обработки
+            # Очищаем поле ввода
+            st.session_state.message_input = ""
+            
+            # Только после отображения сообщений делаем rerun
             st.rerun()
             
         except requests.exceptions.ConnectionError:
@@ -217,7 +210,7 @@ def submit_question():
             st.error("Превышено время ожидания ответа")
         except requests.exceptions.RequestException:
             st.error("Ошибка при отправке запроса")
-        except Exception:
+        except Exception as e:
             st.error("Произошла непредвиденная ошибка")
 
 def translate_text(text):
@@ -296,7 +289,7 @@ def main():
     # Получаем историю чата
     chat_history = chat_db.get_history()
     
-    # Отображаем историю чата
+    # Отображаем и��торию чата
     for message in chat_history:
         message_hash = get_message_hash(message["role"], message["content"])
         if message["role"] == "assistant":
@@ -335,7 +328,7 @@ def main():
             st.session_state.main_clear_chat_confirm = False
             st.rerun()
 
-    # Добавляем разделитель в боковом меню
+    # обавляем разделитель в боковом меню
     st.sidebar.markdown("---")
     
     # Настройки контекста в боковой панели
@@ -365,7 +358,7 @@ def main():
             help="Количество последних сообщений, которые будут анализироваться для создания контекста."
         )
 
-    # Обновляем настройки в session_state
+    # Обновлем настройки в session_state
     st.session_state[MAIN_CHAT_SETTINGS_KEY].update({
         "use_context": use_context,
         "context_messages": context_messages if use_context else 10
@@ -395,7 +388,7 @@ def main():
     with col3:
         cancel_button = st.button("Отменить", key="cancel_request", use_container_width=True)
 
-    # Отправка сооб��ения при нажат��и кнопки или Ctrl+Enter
+    # Отправка сообщения при нажатии кнопки или Ctrl+Enter
     if send_button or (user_input and user_input.strip() != "" and st.session_state.get('_last_input') != user_input):
         st.session_state['_last_input'] = user_input
         submit_question()
