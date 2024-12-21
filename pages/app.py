@@ -157,12 +157,38 @@ def submit_question():
                 headers={'Content-Type': 'application/json'}
             )
             
-            # Проверяем статус ответа
+            # Расширенная проверка статуса ответа
             if response.status_code != 200:
-                st.error("Ошибка при получении ответа от сервера")
+                error_message = f"Ошибка сервера (код {response.status_code})"
+                try:
+                    error_details = response.json()
+                    if isinstance(error_details, dict):
+                        error_message += f": {error_details.get('error', '')}"
+                except:
+                    try:
+                        error_message += f": {response.text}"
+                    except:
+                        pass
+                
+                st.error(error_message)
+                
+                # Добавляем информацию для отладки
+                print(f"API URL: {st.secrets['flowise']['api_url']}")
+                print(f"Response status: {response.status_code}")
+                print(f"Response headers: {response.headers}")
+                try:
+                    print(f"Response content: {response.text}")
+                except:
+                    pass
+                
+                return
+            
+            try:
+                output = response.json()
+            except ValueError as e:
+                st.error(f"Ошибка при разборе ответа: {str(e)}")
                 return
                 
-            output = response.json()
             response_text = output.get('text', '')
             
             if not response_text:
@@ -175,9 +201,6 @@ def submit_question():
                 st.warning("Ошибка при переводе ответа")
                 return
 
-            # Обновляем количество генераций
-            update_remaining_generations(st.session_state.username, -1)
-            
             # Добавляем сообщения в чат
             user_hash = get_message_hash("user", user_input)
             assistant_hash = get_message_hash("assistant", translated_text)
@@ -185,33 +208,35 @@ def submit_question():
             if "message_hashes" not in st.session_state:
                 st.session_state.message_hashes = set()
 
-            # Сначала отображаем сообщения
+            # Добавля��м сообщения в базу данных и отображаем их
             if user_hash not in st.session_state.message_hashes:
                 st.session_state.message_hashes.add(user_hash)
                 chat_db.add_message("user", user_input)
                 with st.chat_message("user", avatar=get_user_profile_image(st.session_state.username)):
-                    st.write(user_input)
+                    st.markdown(user_input)
 
             if assistant_hash not in st.session_state.message_hashes:
                 st.session_state.message_hashes.add(assistant_hash)
                 chat_db.add_message("assistant", translated_text)
                 with st.chat_message("assistant", avatar=assistant_avatar):
-                    st.write(translated_text)
+                    st.markdown(translated_text)
 
-            # Очищаем поле ввода
-            st.session_state.message_input = ""
+            # Обновляем количество генераций
+            update_remaining_generations(st.session_state.username, -1)
             
-            # Только после отображения сообщений делаем rerun
-            st.rerun()
+            # Вместо прямого изменения session_state используем callback
+            st.session_state['_message_input_temp'] = ""  # Временная переменная
+            st.rerun()  # Перезагружаем страницу
             
         except requests.exceptions.ConnectionError:
             st.error("Ошибка подключения к серверу. Проверьте подключение к интернету")
         except requests.exceptions.Timeout:
             st.error("Превышено время ожидания ответа")
-        except requests.exceptions.RequestException:
-            st.error("Ошибка при отправке запроса")
+        except requests.exceptions.RequestException as e:
+            st.error(f"Ошибка при отправке запроса: {str(e)}")
         except Exception as e:
-            st.error("Произошла непредвиденная ошибка")
+            st.error(f"Ошибка: {str(e)}")
+            print(f"Детальная информация об ошибке: {type(e).__name__}: {str(e)}")
 
 def translate_text(text):
     try:
@@ -238,7 +263,7 @@ def clear_chat_history():
 def verify_user_access():
     # Проверяем наличие пользователя и активного токен
     if 'username' not in st.session_state:
-        st.warning("Пожалуйста, войдите в систему")
+        st.warning("Пожалуйст��, войдите в систему")
         switch_page("Вход/Регистрация")
         return False
         
@@ -289,7 +314,7 @@ def main():
     # Получаем историю чата
     chat_history = chat_db.get_history()
     
-    # Отображаем и��торию чата
+    # Отображаем историю чата
     for message in chat_history:
         message_hash = get_message_hash(message["role"], message["content"])
         if message["role"] == "assistant":
@@ -302,7 +327,7 @@ def main():
     # Отображаем количество генераций в начале
     display_remaining_generations()
 
-    # Добавляем кнопк очистки чата
+    # Добаляем кнопк очистки чата
     if "main_clear_chat_confirm" not in st.session_state:
         st.session_state.main_clear_chat_confirm = False
 
@@ -355,7 +380,7 @@ def main():
             max_value=30,
             value=st.session_state[MAIN_CHAT_SETTINGS_KEY]["context_messages"],
             key=f"{MAIN_CHAT_SETTINGS_KEY}_slider",
-            help="Количество последних сообщений, которые будут анализироваться для создания контекста."
+            help="Количество последних сооб��ений, которые будут анализироваться для создания контекста."
         )
 
     # Обновлем настройки в session_state
@@ -369,6 +394,11 @@ def main():
 
     def clear_input():
         st.session_state.message_input = ""
+
+    # Инициализируем значение поля ввода из временной переменной
+    if '_message_input_temp' in st.session_state:
+        st.session_state.message_input = st.session_state._message_input_temp
+        del st.session_state._message_input_temp
 
     # Поле ввода с возможностью растягивания
     user_input = st.text_area(
