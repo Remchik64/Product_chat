@@ -253,7 +253,7 @@ def translate_text(text):
     except Exception as e:
         st.error(f"шибка при еревод: {str(e)}")
         # овращаем оригинальный текст в случае ошибки
-        return f"Оригинальный текст: {text}"
+        return f"Оригиналный текст: {text}"
 
 def clear_chat_history():
     chat_db.clear_history()  # Очистка базы данных истории чата
@@ -263,7 +263,7 @@ def clear_chat_history():
 def verify_user_access():
     # Проверяем наличие пользователя и активного токен
     if 'username' not in st.session_state:
-        st.warning("Пожалуйст��, войдите в систему")
+        st.warning("Пожалуйста, войдите в систему")
         switch_page("Вход/Регистрация")
         return False
         
@@ -290,7 +290,8 @@ def display_assistant_message(content, message_hash):
         with col2:
             if st.button("🗑️", key=f"del_{message_hash}", help="Удалить сообщение"):
                 chat_db.delete_message(message_hash)
-                if "message_hashes" in st.session_state:
+                # Проверяем наличие хэша перед удалением
+                if "message_hashes" in st.session_state and message_hash in st.session_state.message_hashes:
                     st.session_state.message_hashes.remove(message_hash)
                 st.rerun()
 
@@ -303,7 +304,8 @@ def display_user_message(content, message_hash):
         with col2:
             if st.button("🗑️", key=f"del_{message_hash}", help="Удалить сообщение"):
                 chat_db.delete_message(message_hash)
-                if "message_hashes" in st.session_state:
+                # Проверяем наличие хэша перед удалением
+                if "message_hashes" in st.session_state and message_hash in st.session_state.message_hashes:
                     st.session_state.message_hashes.remove(message_hash)
                 st.rerun()
 
@@ -313,6 +315,14 @@ def main():
     
     # Получаем историю чата
     chat_history = chat_db.get_history()
+    
+    # Инициализируем message_hashes, если его нет
+    if "message_hashes" not in st.session_state:
+        st.session_state.message_hashes = set()
+        # Добавляем все существующие хэши
+        for message in chat_history:
+            message_hash = get_message_hash(message["role"], message["content"])
+            st.session_state.message_hashes.add(message_hash)
     
     # Отображаем историю чата
     for message in chat_history:
@@ -380,7 +390,7 @@ def main():
             max_value=30,
             value=st.session_state[MAIN_CHAT_SETTINGS_KEY]["context_messages"],
             key=f"{MAIN_CHAT_SETTINGS_KEY}_slider",
-            help="Количество последних сооб��ений, которые будут анализироваться для создания контекста."
+            help="Количество последних сообений, которые будут анализироваться для создания контекста."
         )
 
     # Обновлем настройки в session_state
