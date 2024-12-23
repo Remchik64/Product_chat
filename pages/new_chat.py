@@ -244,12 +244,6 @@ if use_context:
             help="Выберите диапазон сообщений для анализа контекста"
         )
 
-        # Показываем выбранный диапазон с дополнительной информацией
-        st.sidebar.info(
-            f"Анализируются сообщения с {context_range[0]} по {context_range[1]}\n\n"
-            
-        )
-
         # Обновляем настройки в session_state
         st.session_state[NEW_CHAT_SETTINGS_KEY].update({
             "use_context": use_context,
