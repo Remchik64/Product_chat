@@ -59,16 +59,18 @@ def display_message_with_delete(message, role):
     message_number = history.index(message) + 1  # +1 для человекочитаемой нумерации
     
     with st.chat_message(role, avatar=avatar):
-        col1, col2, col3 = st.columns([0.05, 0.90, 0.05])  # Изменили пропорции колонок
+        col1, col2, col3 = st.columns([0.05, 0.90, 0.05])
         
         with col1:
-            st.write(f"#{message_number}")  # Номер сообщения
+            st.write(f"#{message_number}")
             
         with col2:
             st.markdown(message["content"])
             
         with col3:
-            if st.button("🗑️", key=f"del_{message_hash}", help="Удалить сообщение"):
+            # Делаем ключ кнопки уникальным, добавляя role и message_number
+            button_key = f"del_{role}_{message_hash}_{message_number}"
+            if st.button("🗑️", key=button_key, help="Удалить сообщение"):
                 current_chat_db.delete_message(message_hash)
                 if "message_hashes" in st.session_state:
                     st.session_state.message_hashes.remove(message_hash)
@@ -163,7 +165,7 @@ def clear_chat_history(username, flow_id):
         del st.session_state.message_hashes
     st.rerun()
 
-# Добавьте эту функцию после функции clear_chat_history
+# Добавьте эту функцию после ф��нкции clear_chat_history
 
 def delete_chat_flow(username, flow_id):
     # Получаем текущего пользователя
@@ -199,7 +201,7 @@ if user:
     st.sidebar.metric("Осталось генераций:", remaining_generations)
     
     if remaining_generations <= 0:
-        st.error("У вас закончились генерации. Пожалуйста, активируйте новый токен.")
+        st.error("У вас закончились генераций. Пожалуйста, активируйте новый токен.")
         st.stop()
 
 # Ключ для хранения настроек нового чата
@@ -208,7 +210,7 @@ NEW_CHAT_SETTINGS_KEY = "new_chat_context_settings"
 # Настройки контекста в боковой панели
 st.sidebar.title("Настройки контекста для истории")
 
-# Инициализация настроек в session_state если их нет
+# Инициалиация настроек в session_state если их нет
 if NEW_CHAT_SETTINGS_KEY not in st.session_state:
     st.session_state[NEW_CHAT_SETTINGS_KEY] = {
         "use_context": True,
@@ -227,7 +229,7 @@ if use_context:
     if 'current_chat_flow' in st.session_state:  # Проверяем наличие текущего чата
         current_chat_db = ChatDatabase(f"{st.session_state.username}_{st.session_state.current_chat_flow['id']}")
         history = current_chat_db.get_history()
-        max_messages = len(history) if history else 30
+        max_messages = len(history) if history else 60
         
         # Получаем текущий диапазон из session_state или используем значение по умолчанию
         current_range = st.session_state[NEW_CHAT_SETTINGS_KEY].get("context_range", (1, 10))
@@ -244,8 +246,8 @@ if use_context:
 
         # Показываем выбранный диапазон с дополнительной информацией
         st.sidebar.info(
-            f"Анализируются сообщения с #{context_range[0]} по #{context_range[1]}\n\n"
-            "💡 Номера сообщений отображаются слева от каждого сообщения в чате"
+            f"Анализируются сообщения с {context_range[0]} по {context_range[1]}\n\n"
+            
         )
 
         # Обновляем настройки в session_state
@@ -402,7 +404,7 @@ if 'current_chat_flow' in st.session_state:
     for message in chat_history:
         display_message_with_delete(message, message["role"])
 
-# Функция отп��авки сообщения
+# Функция отправки сообщения
 def submit_message(user_input):
     if not user_input:
         st.warning("Пожалуйста, введите сообщение")
@@ -462,13 +464,25 @@ def submit_message(user_input):
                 api_url = f"{st.secrets['flowise']['base_url']}/api/v1/prediction/{current_chat_id}"
                 
                 payload = {
-                    "question": enhanced_message
+                    "question": enhanced_message,
+                    "overrideConfig": {
+                        "returnSourceDocuments": False,
+                        "model": "together_ai",  # Указываем модель
+                        "temperature": 0.7,
+                        "maxTokens": 2000
+                    }
                 }
                 
+                # Отправляем запрос с дополнительными заголовками
                 response = requests.post(
                     api_url,
                     json=payload,
-                    timeout=100
+                    timeout=100,
+                    headers={
+                        'Content-Type': 'application/json',
+                        'Origin': st.secrets['flowise']['base_url'],
+                        'User-Agent': 'Streamlit-Client'
+                    }
                 )
                 
                 if response.status_code != 200:
@@ -490,7 +504,7 @@ def submit_message(user_input):
                 # Переводим ответ
                 translated_text = translate_text(response_text)
                 
-                # О��ображаем и сохраняем ответ
+                # Ображаем и сохраняем ответ
                 st.markdown(translated_text)
                 
                 assistant_hash = get_message_hash("assistant", translated_text)
