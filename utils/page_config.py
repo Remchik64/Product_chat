@@ -20,14 +20,14 @@ PAGE_CONFIG = {
       "simple_chat": {
         "name": "Бесплатный чат",
         "icon": "💬",
-        "order": 4,
+        "order": 3,
         "show_when_authenticated": True,
         "show_in_menu": True
     },
     "app": {
         "name": "Бизнес чат",
         "icon": "🏠",
-        "order": 3,
+        "order": 4,
         "show_when_authenticated": True
     }, 
     "new_chat": {
