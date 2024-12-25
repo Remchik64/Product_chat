@@ -295,9 +295,8 @@ def display_user_message(content, message_hash):
                 st.rerun()
 
 def clear_input():
-    if 'message_input' in st.session_state:
-        st.session_state.pop('message_input')  # Используем pop вместо прямого присваивания
-        st.rerun()  # Перезагружаем страницу для обновления виджета
+    # Используем callback для очистки
+    st.session_state.message_input = ""
 
 def main():
     # Инициализируем базу данных чата
@@ -324,7 +323,7 @@ def main():
     
     st.title("Бизнес-Идея")
 
-    # Отображаем количест��о генераций в начале
+    # Отображаем количество генераций в начале
     display_remaining_generations()
 
     # Добаляем кнопку очистки чата
@@ -397,18 +396,17 @@ def main():
         placeholder="Введите текст сообщения здесь..."
     )
 
-    # Создаем три колонки для кнопок под полем ввода
+    # Создаем три колонки для кнопок ПОД полем ввода
     col1, col2, col3 = st.columns(3)
     
     with col1:
         send_button = st.button("Отправить", key="send_message", use_container_width=True)
     with col2:
+        # Используем on_click для очистки
         clear_button = st.button("Очистить", key="clear_input", on_click=clear_input, use_container_width=True)
     with col3:
-        cancel_button = st.button("Отменить", key="cancel_request", use_container_width=True)
-        if cancel_button:
-            clear_input()
-            st.rerun()
+        # Для кнопки отмены используем тот же callback
+        cancel_button = st.button("Отменить", key="cancel_request", on_click=clear_input, use_container_width=True)
 
     # Изменяем логику отправки сообщения
     if send_button:  # Отправляем только при явном нажатии кнопки
