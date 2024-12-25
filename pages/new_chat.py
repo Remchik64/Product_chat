@@ -11,6 +11,7 @@ from googletrans import Translator
 from utils.context_manager import ContextManager
 from datetime import datetime
 from utils.page_config import setup_pages
+import time
 
 # Настройка страницы
 st.set_page_config(
@@ -62,16 +63,29 @@ def display_message_with_delete(message, role):
     message_number = history.index(message) + 1  # +1 для человекочитаемой нумерации
     
     with st.chat_message(role, avatar=avatar):
-        col1, col2, col3 = st.columns([0.05, 0.90, 0.05])
+        # Отображаем само сообщение
+        st.markdown(message["content"])
+        
+        # Создаем колонки под сообщением для номера и кнопки удаления
+        col1, col2 = st.columns([0.95, 0.05])
         
         with col1:
-            st.write(f"#{message_number}")
+            # Используем HTML для стилизации номера
+            st.markdown(f"""
+                <div style='
+                    font-size: 1.2em;
+                    font-weight: bold;
+                    color: #666;
+                    padding: 2px 8px;
+                    border-radius: 4px;
+                    background-color: #f0f0f0;
+                    display: inline-block;
+                '>
+                    {message_number}
+                </div>
+            """, unsafe_allow_html=True)
             
         with col2:
-            st.markdown(message["content"])
-            
-        with col3:
-            # Делаем ключ кнопки уникальным, добавляя role и message_number
             button_key = f"del_{role}_{message_hash}_{message_number}"
             if st.button("🗑️", key=button_key, help="Удалить сообщение"):
                 current_chat_db.delete_message(message_hash)
@@ -402,6 +416,36 @@ if 'current_chat_flow' in st.session_state:
         display_message_with_delete(message, message["role"])
 
 # Функция отправки сообщения
+def display_timer():
+    """Отображает анимированный секундомер"""
+    placeholder = st.empty()
+    for seconds in range(60):
+        time_str = f"⏱️ {seconds}с"
+        placeholder.markdown(f"""
+            <div style='animation: blink 1s infinite'>
+                {time_str}
+            </div>
+            <style>
+                div {{
+                    font-size: 1.2em;
+                    font-weight: bold;
+                    color: #1E88E5;
+                    padding: 10px;
+                    border-radius: 8px;
+                    background-color: #E3F2FD;
+                    text-align: center;
+                }}
+                @keyframes blink {{
+                    0%, 100% {{ opacity: 1.0 }}
+                    50% {{ opacity: 0.5 }}
+                }}
+            </style>
+        """, unsafe_allow_html=True)
+        time.sleep(1)
+        if not st.session_state.get('waiting_response', True):
+            break
+    placeholder.empty()
+
 def submit_message(user_input):
     if not user_input:
         st.warning("Пожалуйста, введите сообщение")
@@ -411,116 +455,90 @@ def submit_message(user_input):
         st.error("У вас закончились генераций. Пожалуйста, активируйте новый токен.")
         return
         
-    # Получаем ID текущего чата
-    current_chat_id = st.session_state.current_chat_flow['id']
-    
-    # Создаем уникальный ключ для хранения истории этого чата
-    chat_history_key = f"{st.session_state.username}_{current_chat_id}_history"
-    
-    # Инициализируем базу данных дл этого конкретного чата
-    chat_db = ChatDatabase(f"{st.session_state.username}_{current_chat_id}")
-    
-    # Сохраняем и отображаем сообщение пользователя
-    user_hash = get_message_hash("user", user_input)
-    if "message_hashes" not in st.session_state:
-        st.session_state.message_hashes = set()
+    try:
+        progress_container = st.empty()
+        start_time = time.time()
         
-    if user_hash not in st.session_state.message_hashes:
-        st.session_state.message_hashes.add(user_hash)
-        with st.chat_message("user", avatar=get_user_profile_image(st.session_state.username)):
-            st.markdown(user_input)
-        chat_db.add_message("user", user_input)
-    
-    # Получаем настройки контекста
-    settings = st.session_state.get(NEW_CHAT_SETTINGS_KEY, {
-        "use_context": True,
-        "context_range": (1, 10)
-    })
-    use_context = settings["use_context"]
-    context_range = settings["context_range"]
-    
-    # Получаем и отображаем ответ от ассистента
-    with st.chat_message("assistant", avatar=assistant_avatar):
         with st.spinner('Получаем ответ...'):
-            try:
-                # Инициализируем менеджер контекста для текущего чата
-                chat_context_manager = ContextManager()
-                
-                # Получаем контекст из истории текущего чата
-                if use_context:
-                    enhanced_message = chat_context_manager.get_context(
-                        username=st.session_state.username,
-                        message=user_input,
-                        flow_id=current_chat_id,
-                        context_range=context_range  # Передаем диапазон
-                    )
-                else:
-                    enhanced_message = user_input
-                
-                # Формируем URL с использованием ID текущего чата
-                api_url = f"{st.secrets['flowise']['base_url']}/api/v1/prediction/{current_chat_id}"
-                
-                payload = {
-                    "question": enhanced_message,
-                    "overrideConfig": {
-                        "returnSourceDocuments": False,
-                        "model": "together_ai",  # Указываем модель
-                        "temperature": 0.7,
-                        "maxTokens": 2000
-                    }
+            current_chat_id = st.session_state.current_chat_flow['id']
+            api_url = f"{st.secrets['flowise']['base_url']}/api/v1/prediction/{current_chat_id}"
+            
+            payload = {
+                "question": user_input,
+                "overrideConfig": {
+                    "returnSourceDocuments": False
                 }
+            }
+            
+            headers = {
+                'Content-Type': 'application/json',
+                'Origin': st.secrets['flowise']['base_url'],
+                'User-Agent': 'Streamlit-Client'
+            }
+
+            try:
+                # Сохраняем сообщение пользователя
+                user_hash = get_message_hash("user", user_input)
+                if "message_hashes" not in st.session_state:
+                    st.session_state.message_hashes = set()
                 
-                # Отправляем запрос с дополнительными заголовками
-                response = requests.post(
-                    api_url,
-                    json=payload,
-                    timeout=100,
-                    headers={
-                        'Content-Type': 'application/json',
-                        'Origin': st.secrets['flowise']['base_url'],
-                        'User-Agent': 'Streamlit-Client'
-                    }
-                )
+                if user_hash not in st.session_state.message_hashes:
+                    st.session_state.message_hashes.add(user_hash)
+                    current_chat_db.add_message("user", user_input)
+
+                # Отправляем запрос
+                response = requests.post(api_url, json=payload, headers=headers, timeout=100)
+                elapsed_time = int(time.time() - start_time)
                 
-                if response.status_code != 200:
-                    st.error("Ошибка при получении ответа от сервера")
-                    return
-                
-                try:
-                    output = response.json()
-                except json.JSONDecodeError:
-                    st.error("Ошибка при обработке ответа")
-                    return
+                if response.status_code == 500:
+                    error_details = "Неизвестная ошибка"
+                    try:
+                        error_data = response.json()
+                        error_details = error_data.get('error', 'Внутренняя ошибка сервера')
+                    except:
+                        error_details = response.text[:200]  # Берем первые 200 символов текста ошибки
                     
-                response_text = output.get('text', '')
-                
-                if not response_text:
-                    st.warning("Получен пустой ответ")
+                    st.error(f"""
+                        Ошибка сервера (500). Детали:
+                        - URL: {api_url}
+                        - Ошибка: {error_details}
+                        
+                        Пожалуйста:
+                        1. Проверьте ID чата
+                        2. Убедитесь, что чат активен
+                        3. Попробуйте позже или обратитесь к администратору
+                    """)
                     return
+
+                elif response.status_code == 200:
+                    progress_container.info(f"⏱️ Время обработки: {elapsed_time} сек.")
+                    
+                    try:
+                        response_data = response.json()
+                        assistant_response = response_data.get('text', '')
+                        
+                        if assistant_response:
+                            translated_response = translate_text(assistant_response)
+                            assistant_hash = get_message_hash("assistant", translated_response)
+                            
+                            if assistant_hash not in st.session_state.message_hashes:
+                                st.session_state.message_hashes.add(assistant_hash)
+                                current_chat_db.add_message("assistant", translated_response)
+                                update_remaining_generations(st.session_state.username, -1)
+                                st.rerun()
+                        else:
+                            st.error("Получен пустой ответ от API")
+                    except Exception as e:
+                        st.error(f"Ошибка при обработке ответа: {str(e)}")
+                else:
+                    st.error(f"Неожиданный ответ API (код {response.status_code})")
                 
-                # Переводим ответ
-                translated_text = translate_text(response_text)
+            except requests.exceptions.RequestException as e:
+                progress_container.empty()
+                st.error(f"Ошибка сети при отправке запроса: {str(e)}")
                 
-                # Ображаем и сохраняем ответ
-                st.markdown(translated_text)
-                
-                assistant_hash = get_message_hash("assistant", translated_text)
-                if assistant_hash not in st.session_state.message_hashes:
-                    st.session_state.message_hashes.add(assistant_hash)
-                    chat_db.add_message("assistant", translated_text)
-                
-                # Обновляем количество генераций
-                update_remaining_generations(st.session_state.username, -1)
-                st.rerun()
-                
-            except requests.exceptions.ConnectionError:
-                st.error("Ошибка подключения к серверу. Провеьте подключение к интернету")
-            except requests.exceptions.Timeout:
-                st.error("Превышено время ожидания ответа")
-            except requests.exceptions.RequestException:
-                st.error("Ошибка при отправке запроса")
-            except Exception:
-                st.error("Произошла непредвиденная ошибка")
+    except Exception as e:
+        st.error(f"Общая ошибка: {str(e)}")
 
 # Создаем контейнер для поля ввода
 input_container = st.container()
