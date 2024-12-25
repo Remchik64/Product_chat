@@ -87,7 +87,7 @@ username = st.text_input("Имя пользователя")
 password = st.text_input("Пароль", type="password")
 
 # Кнопки для входа и регистрации
-if st.button("Login"):
+if st.button("Войти"):
     if username and password:  # Проверка на пустые поля
         if username == st.secrets["admin"]["admin_username"] and password == st.secrets["admin"]["admin_password"]:
             st.session_state.authenticated = True
