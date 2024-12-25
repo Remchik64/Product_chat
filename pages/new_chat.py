@@ -204,7 +204,7 @@ if user:
     st.sidebar.metric("Осталось генераций:", remaining_generations)
     
     if remaining_generations <= 0:
-        st.error("У вас закончились ге��ераций. Пожалуйста, активируйте новый токен.")
+        st.error("У вас закончились генераций. Пожалуйста, активируйте новый токен.")
         st.stop()
 
 # Ключ для хранения настроек нового чата
@@ -296,7 +296,7 @@ if chat_flows:
     # Проверяем, изменился ли выбранный чат
     if ('current_chat_flow' not in st.session_state or 
         st.session_state.current_chat_flow['id'] != selected_flow['id']):
-        # Обно��ляем текущий чат
+        # Обноляем текущий чат
         st.session_state.current_chat_flow = selected_flow
         # Очищаем историю сообщений предыдущего чата
         if "message_hashes" in st.session_state:
@@ -526,8 +526,8 @@ def submit_message(user_input):
 input_container = st.container()
 
 def clear_input():
-    if 'message_input' in st.session_state:
-        st.session_state.message_input = ""
+    # Используем callback для очистки
+    st.session_state.message_input = ""
 
 # Поле ввода с возможностью растягивания
 user_input = st.text_area(
@@ -543,11 +543,14 @@ col1, col2, col3 = st.columns(3)
 with col1:
     send_button = st.button("Отправить", key="send_message", use_container_width=True)
 with col2:
+    # Используем on_click для очистки
     clear_button = st.button("Очистить", key="clear_input", on_click=clear_input, use_container_width=True)
 with col3:
-    cancel_button = st.button("Отменить", key="cancel_request", use_container_width=True)
+    # Для кнопки отмены используем тот же callback
+    cancel_button = st.button("Отменить", key="cancel_request", on_click=clear_input, use_container_width=True)
 
-# Отправка сообщения при на��атии кнопки или Ctrl+Enter
-if send_button or (user_input and user_input.strip() != "" and st.session_state.get('_last_input') != user_input):
-    st.session_state['_last_input'] = user_input
-    submit_message(user_input)
+# Изменяем логику отправки сообщения
+if send_button:  # Отправляем только при явном нажатии кнопки
+    if user_input and user_input.strip():
+        st.session_state['_last_input'] = user_input
+        submit_message(user_input)
