@@ -28,13 +28,16 @@ st.set_page_config(
 # Затем настройка страниц
 setup_pages()
 
-# Инициализация менеджера контекста
-context_manager = ContextManager()
-
-# Проверка аутентификации
+# Проверка аутентификации и доступа к API
 if "authenticated" not in st.session_state or not st.session_state.authenticated:
     st.warning("Пожалуйста, войдите в систему")
     switch_page(PAGE_CONFIG["registr"]["name"])
+    st.stop()
+
+# Инициализация менеджера контекста с проверкой
+context_manager = ContextManager()
+if not context_manager.together_api:
+    st.error("Ошибка: API ключ не настроен. Пожалуйста, обратитесь к администратору.")
     st.stop()
 
 # Инициализация session state
@@ -142,6 +145,14 @@ def submit_question():
             else:
                 enhanced_message = user_input
             
+            # Проверяем наличие необходимых секретов
+            if "flowise" not in st.secrets or "api_url" not in st.secrets["flowise"]:
+                st.error("Ошибка конфигурации: отсутствуют настройки API")
+                return
+                
+            api_url = st.secrets["flowise"]["api_url"]
+            
+            # Формируем payload
             payload = {
                 "question": enhanced_message,
                 "overrideConfig": {
@@ -149,78 +160,70 @@ def submit_question():
                 }
             }
             
-            # Проверка доступности API
-            print(f"Trying to access: {st.secrets['flowise']['api_url']}")
-            try:
-                base_response = requests.get(st.secrets['flowise']['base_url'])
-                print(f"Base URL status: {base_response.status_code}")
-            except Exception as e:
-                print(f"Base URL error: {str(e)}")
+            # Добавляем заголовки авторизации если они есть
+            headers = {
+                'Content-Type': 'application/json'
+            }
+            if "api_key" in st.secrets["flowise"]:
+                headers['Authorization'] = f'Bearer {st.secrets["flowise"]["api_key"]}'
             
-            # Отправка запроса
+            # Отправляем запрос
             with st.spinner('Отправляем запрос к API...'):
-                response = requests.post(
-                    st.secrets["flowise"]["api_url"],
-                    json=payload,
-                    timeout=100,
-                    headers={'Content-Type': 'application/json'}
-                )
-                
-                print(f"Request URL: {response.url}")
-                print(f"Response status: {response.status_code}")
-                print(f"Response headers: {response.headers}")
-                
-                # Проверка ответа
-                if response.status_code == 500:
-                    error_text = "Внутренняя ошибка сервера. "
-                    try:
-                        error_json = response.json()
-                        if isinstance(error_json, dict):
-                            error_text += f"Детали: {error_json.get('error', '')}"
-                    except:
-                        error_text += f"Ответ сервера: {response.text}"
-                    st.error(error_text)
-                    return
-                
-                if response.status_code != 200:
-                    st.error(f"Ошибка сервера (код {response.status_code}): {response.text}")
-                    return
-                
                 try:
+                    response = requests.post(
+                        api_url,
+                        json=payload,
+                        headers=headers,
+                        timeout=100
+                    )
+                    
+                    # Подробное логирование ошибок
+                    if response.status_code != 200:
+                        error_msg = f"Ошибка API (код {response.status_code})"
+                        try:
+                            error_details = response.json()
+                            error_msg += f": {error_details.get('error', response.text)}"
+                        except:
+                            error_msg += f": {response.text}"
+                        st.error(error_msg)
+                        print(f"API URL: {api_url}")
+                        print(f"Response status: {response.status_code}")
+                        print(f"Response headers: {response.headers}")
+                        print(f"Response body: {response.text}")
+                        return
+                        
+                    # Обработка успешного ответа
                     output = response.json()
                     response_text = output.get('text', '')
+                    
                     if not response_text:
                         st.warning("Получен пустой ответ от API")
                         return
                         
-                    # Перевод и обработка ответа
+                    # Перевод и отображение ответа
                     translated_text = translate_text(response_text)
-                    if not translated_text:
-                        st.warning("Ошибка при переводе ответа")
-                        return
-                        
+                    
                     # Отображение сообщений
-                    with st.spinner('Обрабатываем ответ...'):
-                        with st.chat_message("user", avatar=get_user_profile_image(st.session_state.username)):
-                            st.markdown(user_input)
-                        
-                        with st.chat_message("assistant", avatar=assistant_avatar):
-                            st.markdown(translated_text)
-                        
-                        # Сохранение сообщений и обновление генераций
-                        chat_db.add_message("user", user_input)
-                        chat_db.add_message("assistant", translated_text)
-                        update_remaining_generations(st.session_state.username, -1)
-                        
+                    with st.chat_message("user", avatar=get_user_profile_image(st.session_state.username)):
+                        st.markdown(user_input)
+                    
+                    with st.chat_message("assistant", avatar=assistant_avatar):
+                        st.markdown(translated_text)
+                    
+                    # Сохранение сообщений
+                    chat_db.add_message("user", user_input)
+                    chat_db.add_message("assistant", translated_text)
+                    update_remaining_generations(st.session_state.username, -1)
+                    
                     st.rerun()
                     
-                except ValueError as e:
-                    st.error(f"Ошибка при обработке ответа: {str(e)}")
-                    return
+                except requests.exceptions.RequestException as e:
+                    st.error(f"Ошибка сети: {str(e)}")
+                    print(f"Network error details: {str(e)}")
                     
     except Exception as e:
         st.error(f"Произошла ошибка: {str(e)}")
-        print(f"Детальная информация об ошибке: {type(e).__name__}: {str(e)}")
+        print(f"Error details: {type(e).__name__}: {str(e)}")
 
 def translate_text(text):
     try:
@@ -293,7 +296,8 @@ def display_user_message(content, message_hash):
 
 def clear_input():
     if 'message_input' in st.session_state:
-        st.session_state.message_input = ""
+        st.session_state.pop('message_input')  # Используем pop вместо прямого присваивания
+        st.rerun()  # Перезагружаем страницу для обновления виджета
 
 def main():
     # Инициализируем базу данных чата
@@ -320,7 +324,7 @@ def main():
     
     st.title("Бизнес-Идея")
 
-    # Отображаем количество генераций в начале
+    # Отображаем количест��о генераций в начале
     display_remaining_generations()
 
     # Добаляем кнопку очистки чата
@@ -334,7 +338,7 @@ def main():
         key="main_clear_chat_button"
     ):
         if st.session_state.main_clear_chat_confirm:
-            # Вы��олняем очистку
+            # Выполняем очистку
             chat_db.clear_history()
             st.session_state.main_clear_chat_confirm = False
             st.rerun()
@@ -402,26 +406,26 @@ def main():
         clear_button = st.button("Очистить", key="clear_input", on_click=clear_input, use_container_width=True)
     with col3:
         cancel_button = st.button("Отменить", key="cancel_request", use_container_width=True)
+        if cancel_button:
+            clear_input()
+            st.rerun()
 
-    # Отправка сообщения при нажатии кнопки или Ctrl+Enter
-    if send_button or (user_input and user_input.strip() != "" and st.session_state.get('_last_input') != user_input):
-        st.session_state['_last_input'] = user_input
-        with st.spinner('Отправляем ваш запрос...'):
-            submit_question()
-
-    # Отмена запроса
-    if cancel_button:
-        clear_input()
-        st.rerun()
-
-    # Добавляем обработку Ctrl+Enter
+    # Изменяем логику отправки сообщения
+    if send_button:  # Отправляем только при явном нажатии кнопки
+        if user_input and user_input.strip():
+            st.session_state['_last_input'] = user_input
+            with st.spinner('Отправляем ваш запрос...'):
+                submit_question()
+    
+    # Обработка Ctrl+Enter
     if user_input and user_input.strip():
         if st.session_state.get('ctrl_enter_pressed', False):
+            st.session_state['_last_input'] = user_input
             with st.spinner('Отправляем ваш запрос...'):
                 submit_question()
                 st.session_state.ctrl_enter_pressed = False
 
-    # JavaScript для ��бработки Ctrl+Enter
+    # JavaScript для обработки Ctrl+Enter
     st.markdown("""
         <script>
         document.addEventListener('keydown', function(e) {

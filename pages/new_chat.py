@@ -28,8 +28,11 @@ if "authenticated" not in st.session_state or not st.session_state.authenticated
     st.warning("Пожалуйста, войдите в систему")
     st.stop()
 
-# Инициализация менеджера контекста
+# Инициализация менеджера контекста с проверкой
 context_manager = ContextManager()
+if not context_manager.together_api:
+    st.error("Ошибка: API ключ не настроен. Пожалуйста, обратитесь к администратору.")
+    st.stop()
 
 # Инициализация путей для аватаров
 PROFILE_IMAGES_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'profile_images'))
@@ -165,7 +168,7 @@ def clear_chat_history(username, flow_id):
         del st.session_state.message_hashes
     st.rerun()
 
-# Добавьте эту функцию после ф��нкции clear_chat_history
+# Добавьте эту функцию после функции clear_chat_history
 
 def delete_chat_flow(username, flow_id):
     # Получаем текущего пользователя
@@ -201,7 +204,7 @@ if user:
     st.sidebar.metric("Осталось генераций:", remaining_generations)
     
     if remaining_generations <= 0:
-        st.error("У вас закончились генераций. Пожалуйста, активируйте новый токен.")
+        st.error("У вас закончились ге��ераций. Пожалуйста, активируйте новый токен.")
         st.stop()
 
 # Ключ для хранения настроек нового чата
@@ -293,7 +296,7 @@ if chat_flows:
     # Проверяем, изменился ли выбранный чат
     if ('current_chat_flow' not in st.session_state or 
         st.session_state.current_chat_flow['id'] != selected_flow['id']):
-        # Обновляем текущий чат
+        # Обно��ляем текущий чат
         st.session_state.current_chat_flow = selected_flow
         # Очищаем историю сообщений предыдущего чата
         if "message_hashes" in st.session_state:
@@ -544,7 +547,7 @@ with col2:
 with col3:
     cancel_button = st.button("Отменить", key="cancel_request", use_container_width=True)
 
-# Отправка сообщения при нажатии кнопки или Ctrl+Enter
+# Отправка сообщения при на��атии кнопки или Ctrl+Enter
 if send_button or (user_input and user_input.strip() != "" and st.session_state.get('_last_input') != user_input):
     st.session_state['_last_input'] = user_input
     submit_message(user_input)

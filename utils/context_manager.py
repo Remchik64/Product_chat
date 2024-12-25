@@ -1,23 +1,32 @@
 import os
 import streamlit as st
+from typing import Optional, List, Dict
 import together
-import json
+from functools import lru_cache
 from utils.chat_database import ChatDatabase
 from tinydb import TinyDB, Query
 import time
 
-# Используем cache_resource для кэширования инициализации Together API
-@st.cache_resource
-def initialize_together_api():
-    os.environ["TOGETHER_API_KEY"] = st.secrets["together"]["api_key"]
-    together.api_key = st.secrets["together"]["api_key"]
-    return together
+@lru_cache()
+def initialize_together_api() -> Optional[str]:
+    """Инициализация Together API с обработкой ошибок"""
+    try:
+        if "together" in st.secrets and "api_key" in st.secrets["together"]:
+            api_key = st.secrets["together"]["api_key"]
+            os.environ["TOGETHER_API_KEY"] = api_key
+            together.api_key = api_key
+            return api_key
+        return None
+    except Exception as e:
+        print(f"Ошибка при инициализации Together API: {e}")
+        return None
 
 class ContextManager:
     def __init__(self):
-        # Инициализируем Together API через кэшированную функцию
+        """Инициализация менеджера контекста с обработкой ошибок"""
         self.together_api = initialize_together_api()
-        
+        self.default_context = "Вы - профессиональный бизнес-консультант."
+
     def get_context(self, username, message, flow_id=None, context_range=(1, 10)):
         """
         Получает контекст для сообщения на основе истории конкретного чата
