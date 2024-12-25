@@ -452,7 +452,7 @@ def submit_message(user_input):
         return
         
     if remaining_generations <= 0:
-        st.error("У вас закончились генераций. Пожалуйста, активируйте новый токен.")
+        st.error("У вас нет активных генераций. Пожалуйста, активируйте новый токен.")
         return
         
     try:

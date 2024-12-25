@@ -65,15 +65,15 @@ if user_data:
     st.session_state.remaining_generations = user_data.get('remaining_generations', 0)
     st.session_state.access_granted = bool(user_data.get('active_token'))
     
-    # Проверяем токен  статус доступа
+    # Проверяем токен и статус доступа
     if not st.session_state.active_token:
         st.warning("Пожалуйста, введите ключ доступа")
-        switch_page("Ввод/Покупка токена")
+        switch_page(PAGE_CONFIG["key_input"]["name"])  # Используем название из конфигурации
 else:
-    st.error("Пользователь н найден")
+    st.error("Пользователь не найден")
     st.session_state.authenticated = False
     setup_pages()
-    switch_page("Вход/Регистрация")
+    switch_page(PAGE_CONFIG["registr"]["name"])
 
 # Инициализируем базы данных
 chat_db = ChatDatabase(f"{st.session_state.username}_main_chat")  # Добавляем суффикс для главной страницы
@@ -194,7 +194,7 @@ def submit_question():
             if "together" in st.secrets and "api_key" in st.secrets["together"]:
                 headers['Authorization'] = f'Bearer {st.secrets.together.api_key}'
             
-            # Отправляем запрос
+            # Отправ��яем запрос
             response = requests.post(api_url, json=payload, headers=headers, timeout=100)
             elapsed_time = int(time.time() - start_time)
             
@@ -220,7 +220,7 @@ def submit_question():
                     st.warning("Получен пустой ответ")
                     return
                 
-                # Отображаем и сохраняем от��ет
+                # Отображаем и сохраняем ответ
                 with st.chat_message("assistant", avatar=assistant_avatar):
                     st.markdown(response_text)
                     
@@ -288,21 +288,21 @@ def clear_chat_history():
         del st.session_state["message_hashes"]  # Сброс хэшей сообщений
 
 def verify_user_access():
-    # Проверяем наличие пользователя и активного токен
+    # Проверяем наличие пользователя и активного токена
     if 'username' not in st.session_state:
         st.warning("Пожалуйста, войдите в систему")
-        switch_page("Вход/Регистрация")
+        switch_page(PAGE_CONFIG["registr"]["name"])
         return False
         
     user_data = user_db.search(User.username == st.session_state.username)
     if not user_data:
         st.error("Пользователь не найден")
-        switch_page("Вход/Регистрация")
+        switch_page(PAGE_CONFIG["registr"]["name"])
         return False
         
     if not user_data[0].get('active_token'):
         st.warning("Пожалуйста, введите ключ доступа")
-        switch_page("Вход/Регистрация")
+        switch_page(PAGE_CONFIG["key_input"]["name"])  # Используем название из конфигурации
         return False
         
     return True
@@ -420,7 +420,7 @@ def main():
 
     # Заменяем простую кнопку очистки на кнопку с подтверждением
     if st.sidebar.button(
-        "Очистить чат" if not st.session_state.main_clear_chat_confirm else "⚠️ Нажмите еще раз для подтверждения",
+        "Очистить чат" if not st.session_state.main_clear_chat_confirm else "⚠��� Нажмите еще раз для подтверждения",
         type="secondary" if not st.session_state.main_clear_chat_confirm else "primary",
         key="main_clear_chat_button"
     ):
@@ -434,7 +434,7 @@ def main():
             st.session_state.main_clear_chat_confirm = True
             st.sidebar.warning("⚠️ Вы уверены? Это действие нельзя отменить!")
 
-    # Добавляем кнопку отмены, если показано предупреж��ение
+    # Добавляем кнопку отмены, если показано предупреждение
     if st.session_state.main_clear_chat_confirm:
         if st.sidebar.button("Отмена", key="main_cancel_clear"):
             st.session_state.main_clear_chat_confirm = False
@@ -493,7 +493,7 @@ def main():
         # Используем on_click для очистки
         clear_button = st.button("Очистить", key="clear_input", on_click=clear_input, use_container_width=True)
     with col3:
-        # Для кнопки отмены используем тот же callback
+        # Для кнопки от��ены используем тот же callback
         cancel_button = st.button("Отменить", key="cancel_request", on_click=clear_input, use_container_width=True)
 
     # Изменяем логику отправки сообщения
