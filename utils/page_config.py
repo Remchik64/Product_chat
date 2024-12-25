@@ -12,41 +12,48 @@ PAGE_CONFIG = {
         "show_in_menu": False
     },
     "key_input": {
-        "name": "Ввод/Покупка токена",
+        "name": "Ввод/Покупка ключа",
         "icon": "🔑",
         "order": 2,
         "show_when_authenticated": True
     },
+      "simple_chat": {
+        "name": "Бесплатный чат",
+        "icon": "💬",
+        "order": 4,
+        "show_when_authenticated": True,
+        "show_in_menu": True
+    },
     "app": {
-        "name": "Главная",
+        "name": "Бизнес чат",
         "icon": "🏠",
         "order": 3,
         "show_when_authenticated": True
-    },
+    }, 
     "new_chat": {
         "name": "Личный помощник",
         "icon": "💭",
-        "order": 4,
+        "order": 5,
         "show_when_authenticated": True,
         "show_in_menu": True
     },
     "profile": {
         "name": "Профиль",
         "icon": "👤",
-        "order": 5,
+        "order": 6,
         "show_when_authenticated": True
     },
     "admin/generate_tokens": {
-        "name": "Генерация токенов",
+        "name": "Генерация ключей",
         "icon": "🔑",
-        "order": 6,
+        "order": 7,
         "show_when_authenticated": True,
         "admin_only": True
     },
     "admin/memory": {
         "name": "Память",
         "icon": "🧠",
-        "order": 7,
+        "order": 8,
         "show_when_authenticated": True,
         "admin_only": True
     }
