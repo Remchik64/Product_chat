@@ -7,7 +7,7 @@ from PIL import Image
 
 # Настройка заголовка страницы
 st.set_page_config(
-    page_title="Простой чат",
+    page_title="Вопросы и ответы",
     page_icon="💬",
     layout="wide"
 )
