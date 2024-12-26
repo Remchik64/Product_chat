@@ -4,6 +4,7 @@ from time import sleep
 import hashlib
 import os
 from PIL import Image
+from googletrans import Translator
 
 # Настройка заголовка страницы
 st.set_page_config(
@@ -61,7 +62,7 @@ def get_user_messages_key():
 def get_api_url():
     """Получение URL API из секретов"""
     try:
-        # Проверяем наличие ��еобходимых параметров
+        # Проверяем наличие необходимых параметров
         if not hasattr(st.secrets, 'flowise'):
             st.error("Секция 'flowise' не найдена в secrets.toml")
             return None
@@ -98,27 +99,25 @@ def get_api_url():
 def query(question):
     """Отправка запроса к API"""
     try:
-        # Получаем полный URL API
         api_url = get_api_url()
         if not api_url:
             st.error("API URL не найден в конфигурации")
             return None
 
-        # Формируем payload для Flowise с явным указанием языка
+        # Обновленный payload с корректными параметрами
         payload = {
             "question": question,
             "overrideConfig": {
                 "temperature": 0.7,
                 "modelName": "mistral",
                 "maxTokens": 2000,
-                "systemMessage": """Вы - полезный ассистент. 
-                ВАЖНО: Всегда отвечайте на русском языке, независимо от языка вопроса.
-                Если получен вопрос на другом языке, сначала переведите его на русский, 
-                затем дайте ответ на русском языке."""
-            }
+                "systemMessage": "Вы - полезный ассистент. Отвечайте на русском языке.",
+                "returnSourceDocuments": False
+            },
+            "history": st.session_state.get(get_user_messages_key(), [])
         }
         
-        # Добавляем заголовки
+        # Обновленные заголовки
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json"
@@ -127,46 +126,24 @@ def query(question):
         # Добавляем API ключ Together AI
         if "together" in st.secrets and "api_key" in st.secrets["together"]:
             headers["Authorization"] = f"Bearer {st.secrets.together.api_key}"
-        
-        # Отладочная информация
-        print(f"Sending request to: {api_url}")
-        print(f"Payload: {payload}")
-        print(f"Headers: {headers}")
+            headers["Origin"] = st.secrets.flowise.base_url
         
         # Отправляем запрос с увеличенным timeout
-        response = requests.post(api_url, json=payload, headers=headers, timeout=60)
+        response = requests.post(
+            api_url, 
+            json=payload, 
+            headers=headers, 
+            timeout=60
+        )
         
-        # Подробная обработка ошибок
-        if response.status_code == 500:
-            error_data = response.json()
-            error_message = error_data.get('message', 'Unknown error')
-            st.error(f"Ошибка сервера: {error_message}")
-            print(f"Server error details: {error_data}")
-            return None
-            
-        if response.status_code != 200:
+        if response.status_code == 200:
+            return response.json()
+        else:
             st.error(f"Ошибка API (код {response.status_code}): {response.text}")
             return None
             
-        try:
-            result = response.json()
-            if not result or 'text' not in result:
-                st.error("Получен некорректный ответ от API")
-                print(f"API response: {result}")
-                return None
-            return result
-        except Exception as e:
-            st.error(f"Ошибка при обработке ответа: {str(e)}")
-            print(f"Response content: {response.text}")
-            return None
-            
-    except requests.exceptions.RequestException as e:
-        st.error(f"Ошибка сети при отправке запроса: {str(e)}")
-        print(f"Request error details: {str(e)}")
-        return None
     except Exception as e:
-        st.error(f"Неожиданная ошибка: {str(e)}")
-        print(f"Unexpected error details: {str(e)}")
+        st.error(f"Ошибка при отправке запроса: {str(e)}")
         return None
 
 def count_api_responses():
@@ -177,9 +154,9 @@ def count_api_responses():
 def sidebar_content():
     """Содержимое боковой панели"""
     with st.sidebar:
-        st.header("��правление чатом")
+        st.header("Управление чатом")
         
-        # Отображение информации о пользователе
+        # Отображение инфо��мации о пользователе
         if st.session_state.get("email"):
             user_avatar = get_user_profile_image(st.session_state.get("username", ""))
             col1, col2 = st.columns([1, 3])
@@ -201,6 +178,84 @@ def sidebar_content():
             messages_key = get_user_messages_key()
             st.session_state[messages_key] = []
             st.rerun()
+
+def translate_text(text, target_lang='ru'):
+    """
+    Переводит текст на указанный язык
+    target_lang: 'ru' для русского или 'en' для английского
+    """
+    try:
+        translator = Translator()
+        
+        if text is None or not isinstance(text, str) or text.strip() == '':
+            return "Пустой текст для перевода"
+            
+        # Определяем язык текста
+        detected_lang = translator.detect(text).lang
+        
+        # Если текст уже на целевом языке, меняем язык перевода
+        if detected_lang == target_lang:
+            target_lang = 'en' if target_lang == 'ru' else 'ru'
+            
+        translation = translator.translate(text, dest=target_lang)
+        if translation and hasattr(translation, 'text') and translation.text:
+            return translation.text
+            
+        return f"Ошибка перевода: некорректный ответ от переводчика"
+        
+    except Exception as e:
+        st.error(f"Ошибка при переводе: {str(e)}")
+        return text
+
+def display_message_with_translation(message):
+    """Отображает сообщение с кнопкой перевода"""
+    message_hash = get_message_hash(message["role"], message["content"])
+    avatar = assistant_avatar if message["role"] == "assistant" else get_user_profile_image(st.session_state.get("username", ""))
+    
+    # Инициализируем состояние перевода для этого сообщения
+    translation_key = f"translation_state_{message_hash}"
+    if translation_key not in st.session_state:
+        st.session_state[translation_key] = {
+            "is_translated": False,
+            "original_text": message["content"],
+            "translated_text": None
+        }
+    
+    with st.chat_message(message["role"], avatar=avatar):
+        cols = st.columns([0.95, 0.05])
+        
+        # Создаем placeholder для сообщения в первой колонке
+        with cols[0]:
+            message_placeholder = st.empty()
+            current_state = st.session_state[translation_key]
+            
+            # Показываем текущий текст в зависимости от состояния перевода
+            if current_state["is_translated"] and current_state["translated_text"]:
+                message_placeholder.markdown(current_state["translated_text"])
+            else:
+                message_placeholder.markdown(current_state["original_text"])
+            
+        # Кнопка перевода во второй колонке
+        with cols[1]:
+            if st.button("🔄", key=f"translate_{message_hash}", help="Перевести сообщение"):
+                current_state = st.session_state[translation_key]
+                
+                if current_state["is_translated"]:
+                    # Возвращаемся к оригинальному тексту
+                    message_placeholder.markdown(current_state["original_text"])
+                    st.session_state[translation_key]["is_translated"] = False
+                else:
+                    # Переводим текст
+                    if not current_state["translated_text"]:
+                        translated_text = translate_text(current_state["original_text"])
+                        st.session_state[translation_key]["translated_text"] = translated_text
+                    
+                    message_placeholder.markdown(st.session_state[translation_key]["translated_text"])
+                    st.session_state[translation_key]["is_translated"] = True
+
+def get_message_hash(role, content):
+    """Создает уникальный хэш для сообщения"""
+    return hashlib.md5(f"{role}:{content}".encode()).hexdigest()
 
 def main():
     # Проверка аутентификации
@@ -227,17 +282,11 @@ def main():
     # Отображаем боковую панель
     sidebar_content()
 
-    # Отображение истории сообщений с аватарами
+    # Отображение истории сообщений
     for message in st.session_state[messages_key]:
-        if message["role"] == "assistant":
-            with st.chat_message("assistant", avatar=assistant_avatar):
-                st.markdown(message["content"])
-        else:
-            user_avatar = get_user_profile_image(st.session_state.get("username", ""))
-            with st.chat_message("user", avatar=user_avatar):
-                st.markdown(message["content"])
+        display_message_with_translation(message)
 
-    # Проверяем лимит ответов
+    # Про��еряем лимит ответов
     if count_api_responses() >= MAX_API_RESPONSES:
         st.warning("⚠️ Достигнут лимит ответов. Пожалуйста, очистите историю чата для продолжения общения.")
         return
@@ -246,23 +295,20 @@ def main():
     if prompt := st.chat_input("Введите ваше сообщение..."):
         # Добавление сообщения пользователя
         st.session_state[messages_key].append({"role": "user", "content": prompt})
-        user_avatar = get_user_profile_image(st.session_state.get("username", ""))
-        with st.chat_message("user", avatar=user_avatar):
-            st.markdown(prompt)
+        display_message_with_translation({"role": "user", "content": prompt})
 
         # Получение ответа от API
-        with st.chat_message("assistant", avatar=assistant_avatar):
-            message_placeholder = st.empty()
-            with st.spinner("Обработка запроса..."):
-                response = query(prompt)
-                
-                if response:
-                    full_response = response.get("text", "Извините, произошла ошибка при получении ответа")
-                    message_placeholder.markdown(full_response)
-                    # Добавление ответа ассистента в историю
-                    st.session_state[messages_key].append({"role": "assistant", "content": full_response})
-                else:
-                    message_placeholder.markdown("Произошла ошибка при получении ответа")
+        with st.spinner("Обработка запроса..."):
+            response = query(prompt)
+            
+            if response:
+                full_response = response.get("text", "Извините, произошла ошибка при получении ответа")
+                # Добавление ответа ассистента в историю
+                assistant_message = {"role": "assistant", "content": full_response}
+                st.session_state[messages_key].append(assistant_message)
+                display_message_with_translation(assistant_message)
+            else:
+                st.error("Произошла ошибка при получении ответа")
 
 if __name__ == "__main__":
     main() 

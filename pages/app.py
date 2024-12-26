@@ -15,6 +15,7 @@ from typing import List
 from utils.context_manager import ContextManager
 import json
 import time
+from utils.translation import translate_text, display_message_with_translation
 
 # Ключ для настроек основного чата
 MAIN_CHAT_SETTINGS_KEY = "main_chat_context_settings"
@@ -160,8 +161,7 @@ def submit_question():
             chat_db.add_message("user", user_input)
             
         # Отображаем сообщение пользователя
-        with st.chat_message("user", avatar=get_user_profile_image(st.session_state.username)):
-            st.markdown(user_input)
+        display_message({"role": "user", "content": user_input}, "user")
 
         progress_container = st.empty()
         start_time = time.time()
@@ -231,29 +231,12 @@ def submit_question():
                 except Exception as e:
                     st.error(f"Ошибка при переводе: {str(e)}")
                 
-                # Отображаем и сохраняем ответ
-                with st.chat_message("assistant", avatar=assistant_avatar):
-                    st.markdown(response_text)
+                # Отображаем ответ ассистента
+                if response_text:
+                    assistant_message = {"role": "assistant", "content": response_text}
+                    display_message(assistant_message, "assistant")
                     
-                    # Создаем колонки под сообщением
-                    col1, col2 = st.columns([0.95, 0.05])
-                    
-                    with col1:
-                        message_number = len(chat_db.get_history()) + 1
-                        st.markdown(f"""
-                            <div style='
-                                font-size: 1.2em;
-                                font-weight: bold;
-                                color: #666;
-                                padding: 2px 8px;
-                                border-radius: 4px;
-                                background-color: #f0f0f0;
-                                display: inline-block;
-                            '>
-                                {message_number}
-                            </div>
-                        """, unsafe_allow_html=True)
-                    
+                    # Сохраняем сообщение в базу
                     assistant_hash = get_message_hash("assistant", response_text)
                     if assistant_hash not in st.session_state.message_hashes:
                         st.session_state.message_hashes.add(assistant_hash)
@@ -276,29 +259,65 @@ def submit_question():
         st.error(f"Проиошла ошибка: {str(e)}")
         print(f"Unexpected error details: {str(e)}")
 
-def translate_text(text):
-    try:
-        translator = Translator()
-        # Проверяем входной текст
-        if text is None or not isinstance(text, str) or text.strip() == '':
-            return "Получен п отет от API"
-            
-        translation = translator.translate(text, dest='ru')
-        if translation and hasattr(translation, 'text') and translation.text:
-            return translation.text
-        return "Ошиба пеевода: некорректный ответ от переводчика"
-        
-    except Exception as e:
-        st.error(f"шибка при еревод: {str(e)}")
-        # овращаем оригинальный текст в случае ошибки
-        return f"Оригиналный текст: {text}"
+def clear_input():
+    """Очистка поля ввода"""
+    st.session_state.message_input = ""
 
-def clear_chat_history():
-    chat_db.clear_history()  # Очистка бзы данных истории чата
-    if "message_hashes" in st.session_state:
-        del st.session_state["message_hashes"]  # Сброс хэшей сообщений
+def display_message(message, role):
+    """Отображает сообщение с кнопками управления"""
+    message_hash = get_message_hash(role, message["content"])
+    avatar = assistant_avatar if role == "assistant" else get_user_profile_image(st.session_state.username)
+    
+    # Инициализируем состояние перевода для этого сообщения
+    translation_key = f"translation_state_{message_hash}"
+    if translation_key not in st.session_state:
+        st.session_state[translation_key] = {
+            "is_translated": False,
+            "original_text": message["content"],
+            "translated_text": None
+        }
+    
+    with st.chat_message(role, avatar=avatar):
+        cols = st.columns([0.9, 0.05, 0.05])
+        
+        with cols[0]:
+            message_placeholder = st.empty()
+            current_state = st.session_state[translation_key]
+            
+            # Показываем текущий текст в зависимости от состояния перевода
+            if current_state["is_translated"] and current_state["translated_text"]:
+                message_placeholder.markdown(current_state["translated_text"])
+            else:
+                message_placeholder.markdown(current_state["original_text"])
+            
+        with cols[1]:
+            # Кнопка перевода
+            if st.button("🔄", key=f"translate_{message_hash}", help="Перевести сообщение"):
+                current_state = st.session_state[translation_key]
+                
+                if current_state["is_translated"]:
+                    # Возвращаемся к оригинальному тексту
+                    message_placeholder.markdown(current_state["original_text"])
+                    st.session_state[translation_key]["is_translated"] = False
+                else:
+                    # Переводим текст
+                    if not current_state["translated_text"]:
+                        translated_text = translate_text(current_state["original_text"])
+                        st.session_state[translation_key]["translated_text"] = translated_text
+                    
+                    message_placeholder.markdown(st.session_state[translation_key]["translated_text"])
+                    st.session_state[translation_key]["is_translated"] = True
+                
+        with cols[2]:
+            # Кнопка удаления
+            if st.button("🗑", key=f"del_{message_hash}", help="Удалить сообщение"):
+                chat_db.delete_message(message_hash)
+                if "message_hashes" in st.session_state:
+                    st.session_state.message_hashes.remove(message_hash)
+                st.rerun()
 
 def verify_user_access():
+    """Проверка доступа пользователя"""
     # Проверяем наличие пользователя и активного токена
     if 'username' not in st.session_state:
         st.warning("Пожалуйста, войдите в систему")
@@ -313,89 +332,16 @@ def verify_user_access():
         
     if not user_data[0].get('active_token'):
         st.warning("Пожалуйста, введите ключ доступа")
-        switch_page(PAGE_CONFIG["key_input"]["name"])  # Используем название из конфигурации
+        switch_page(PAGE_CONFIG["key_input"]["name"])
         return False
         
     return True
 
-
-
-def display_assistant_message(message, message_hash):
-    # Получаем историю чата для определения номера сообщения
-    chat_history = chat_db.get_history()
-    message_number = next((i + 1 for i, msg in enumerate(chat_history) 
-                         if get_message_hash(msg["role"], msg["content"]) == message_hash), 0)
-    
-    with st.chat_message("assistant", avatar=assistant_avatar):
-        # Отображаем само сообщение - берем только content из объекта message
-        st.markdown(message["content"])
-        
-        # Создаем колонки под сообщением для номера и кнопки удаления
-        col1, col2 = st.columns([0.95, 0.05])
-        
-        with col1:
-            # Используем HTML для стилизации номера
-            st.markdown(f"""
-                <div style='
-                    font-size: 1.2em;
-                    font-weight: bold;
-                    color: #666;
-                    padding: 2px 8px;
-                    border-radius: 4px;
-                    background-color: #f0f0f0;
-                    display: inline-block;
-                '>
-                    {message_number}
-                </div>
-            """, unsafe_allow_html=True)
-            
-        with col2:
-            if st.button("🗑", key=f"del_{message_hash}", help="Удалить сообщение"):
-                chat_db.delete_message(message_hash)
-                if "message_hashes" in st.session_state and message_hash in st.session_state.message_hashes:
-                    st.session_state.message_hashes.remove(message_hash)
-                st.rerun()
-
-def display_user_message(message, message_hash):
-    # Получаем историю чата для определения номера сообщения
-    chat_history = chat_db.get_history()
-    message_number = next((i + 1 for i, msg in enumerate(chat_history) 
-                         if get_message_hash(msg["role"], msg["content"]) == message_hash), 0)
-    
-    user_avatar = get_user_profile_image(st.session_state.username)
-    with st.chat_message("user", avatar=user_avatar):
-        # Отображаем само сообщение - берем только content из объекта message
-        st.markdown(message["content"])
-        
-        # Создаем колонки под сообщением для номера и кнопки удаления
-        col1, col2 = st.columns([0.95, 0.05])
-        
-        with col1:
-            # Используем HTML для стилизации номера
-            st.markdown(f"""
-                <div style='
-                    font-size: 1.2em;
-                    font-weight: bold;
-                    color: #666;
-                    padding: 2px 8px;
-                    border-radius: 4px;
-                    background-color: #f0f0f0;
-                    display: inline-block;
-                '>
-                    {message_number}
-                </div>
-            """, unsafe_allow_html=True)
-            
-        with col2:
-            if st.button("🗑", key=f"del_{message_hash}", help="Удалить сообщение"):
-                chat_db.delete_message(message_hash)
-                if "message_hashes" in st.session_state and message_hash in st.session_state.message_hashes:
-                    st.session_state.message_hashes.remove(message_hash)
-                st.rerun()
-
-def clear_input():
-    # Используем callback для очистки
-    st.session_state.message_input = ""
+def clear_chat_history():
+    """Очистка истории чата"""
+    chat_db.clear_history()  # Очистка базы данных истории чата
+    if "message_hashes" in st.session_state:
+        del st.session_state["message_hashes"]  # Сброс хэшей сообщений
 
 def main():
     # Инициализируем базу данных чата
@@ -414,18 +360,14 @@ def main():
     
     # Ображаем историю чата
     for message in chat_history:
-        message_hash = get_message_hash(message["role"], message["content"])
-        if message["role"] == "assistant":
-            display_assistant_message(message, message_hash)
-        else:
-            display_user_message(message, message_hash)
+        display_message(message, message["role"])
     
     st.title("Бизнес-Идея")
 
     # Отображаем количество генераций в начале
     display_remaining_generations()
 
-    # Добаляем кнопку очистки чата
+    # Добаляем кнопку о��истки чата
     if "main_clear_chat_confirm" not in st.session_state:
         st.session_state.main_clear_chat_confirm = False
 
@@ -478,7 +420,7 @@ def main():
             max_value=30,
             value=st.session_state[MAIN_CHAT_SETTINGS_KEY]["context_messages"],
             key=f"{MAIN_CHAT_SETTINGS_KEY}_slider",
-            help="Количество последних сообщений, которые будут анализироваться для создания контекста."
+            help="Количество последних сообщений, которые будут анализироватьс�� для создания контекста."
         )
 
     # Обновлем настройки в session_state
@@ -487,7 +429,7 @@ def main():
         "context_messages": context_messages if use_context else 10
     })
 
-    # Поле ввода  воможностью растягивания
+    # Поле ввода с возможностью растягивания
     user_input = st.text_area(
         "Введите ваше сообщение",
         height=100,
@@ -495,32 +437,21 @@ def main():
         placeholder="Введите текст сообщения здесь..."
     )
 
-    # Создаем три колонки для кнопок ПОД полем ввода
+    # Создаем три колонки для кнопок
     col1, col2, col3 = st.columns(3)
     
     with col1:
         send_button = st.button("Отправить", key="send_message", use_container_width=True)
     with col2:
-        # Используем on_click для очистки
         clear_button = st.button("Очистить", key="clear_input", on_click=clear_input, use_container_width=True)
     with col3:
-        # Для кнопки отмены используем тот же callback
         cancel_button = st.button("Отменить", key="cancel_request", on_click=clear_input, use_container_width=True)
 
-    # Изменяем логику отправки сообщения
-    if send_button:  # Отправляем только при явном нажатии кнопки
-        if user_input and user_input.strip():
-            st.session_state['_last_input'] = user_input
-            with st.spinner('Отправляем ваш запрос...'):
-                submit_question()
-    
-    # Обработка Ctrl+Enter
-    if user_input and user_input.strip():
-        if st.session_state.get('ctrl_enter_pressed', False):
-            st.session_state['_last_input'] = user_input
-            with st.spinner('Отправляем ваш запрос...'):
-                submit_question()
-                st.session_state.ctrl_enter_pressed = False
+    # Обработка отправки сообщения
+    if send_button and user_input and user_input.strip():
+        st.session_state['_last_input'] = user_input
+        with st.spinner('Отправляем ваш запрос...'):
+            submit_question()
 
     # JavaScript для обработки Ctrl+Enter
     st.markdown("""

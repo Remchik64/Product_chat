@@ -12,6 +12,7 @@ from utils.context_manager import ContextManager
 from datetime import datetime
 from utils.page_config import setup_pages
 import time
+from utils.translation import translate_text, display_message_with_translation
 
 # Настройка страницы
 st.set_page_config(
@@ -52,46 +53,11 @@ def get_message_hash(role, content):
     """Создает уникальный хэш для сообщения"""
     return hashlib.md5(f"{role}:{content}".encode()).hexdigest()
 
-def display_message_with_delete(message, role):
-    """Отображает сообщение с кнопкой удаления и номером"""
+def display_message(message, role):
+    """Отображает сообщение с кнопками управления"""
     message_hash = get_message_hash(role, message["content"])
     avatar = assistant_avatar if role == "assistant" else get_user_profile_image(st.session_state.username)
-    
-    # Получаем номер сообщения из его индекса в истории
-    current_chat_db = ChatDatabase(f"{st.session_state.username}_{st.session_state.current_chat_flow['id']}")
-    history = current_chat_db.get_history()
-    message_number = history.index(message) + 1  # +1 для человекочитаемой нумерации
-    
-    with st.chat_message(role, avatar=avatar):
-        # Отображаем само сообщение
-        st.markdown(message["content"])
-        
-        # Создаем колонки под сообщением для номера и кнопки удаления
-        col1, col2 = st.columns([0.95, 0.05])
-        
-        with col1:
-            # Используем HTML для стилизации номера
-            st.markdown(f"""
-                <div style='
-                    font-size: 1.2em;
-                    font-weight: bold;
-                    color: #666;
-                    padding: 2px 8px;
-                    border-radius: 4px;
-                    background-color: #f0f0f0;
-                    display: inline-block;
-                '>
-                    {message_number}
-                </div>
-            """, unsafe_allow_html=True)
-            
-        with col2:
-            button_key = f"del_{role}_{message_hash}_{message_number}"
-            if st.button("🗑️", key=button_key, help="Удалить сообщение"):
-                current_chat_db.delete_message(message_hash)
-                if "message_hashes" in st.session_state:
-                    st.session_state.message_hashes.remove(message_hash)
-                st.rerun()
+    display_message_with_translation(message, message_hash, avatar, role)
 
 def get_user_profile_image(username):
     for ext in ['png', 'jpg', 'jpeg']:
@@ -199,7 +165,7 @@ def delete_chat_flow(username, flow_id):
     # Обновляем список чатов в базе данных
     user_db.update({'chat_flows': chat_flows}, User.username == username)
     
-    # Удаляем историю чата
+    # Удаляем истор��ю чата
     chat_db = ChatDatabase(f"{username}_{flow_id}")
     chat_db.clear_history()
     
@@ -367,7 +333,7 @@ if st.sidebar.button(
     if st.session_state.new_chat_delete_confirm:
         if 'current_chat_flow' in st.session_state:
             if delete_chat_flow(st.session_state.username, st.session_state.current_chat_flow['id']):
-                st.sidebar.success("Чат успешно удален!")
+                st.sidebar.success("Чат успешно удал��н!")
                 if 'current_chat_flow' in st.session_state:
                     del st.session_state.current_chat_flow
                 if 'message_hashes' in st.session_state:
@@ -413,7 +379,7 @@ if 'current_chat_flow' in st.session_state:
     # Отображение истории текущего чата
     chat_history = current_chat_db.get_history()
     for message in chat_history:
-        display_message_with_delete(message, message["role"])
+        display_message(message, message["role"])
 
 # Функция отправки сообщения
 def display_timer():
@@ -452,7 +418,7 @@ def submit_message(user_input):
         return
         
     if remaining_generations <= 0:
-        st.error("У вас нет активных генераций. Пожалуйста, активируйте новый токен.")
+        st.error("У вас нет активны�� генераций. Пожалуйста, активируйте новый токен.")
         return
         
     try:
