@@ -1,5 +1,6 @@
 from googletrans import Translator
 import streamlit as st
+import time
 
 def translate_text(text, target_lang='ru'):
     """
@@ -31,6 +32,9 @@ def translate_text(text, target_lang='ru'):
 
 def display_message_with_translation(message, message_hash, avatar, role):
     """Отображает сообщение с кнопкой перевода"""
+    # Добавляем timestamp к ключу, чтобы сделать его уникальным
+    unique_key = f"{message_hash}_{int(time.time()*1000)}"
+    
     # Инициализируем состояние перевода для этого сообщения
     translation_key = f"translation_state_{message_hash}"
     if translation_key not in st.session_state:
@@ -56,7 +60,8 @@ def display_message_with_translation(message, message_hash, avatar, role):
             
         # Кнопка перевода во второй колонке
         with cols[1]:
-            if st.button("🔄", key=f"translate_{message_hash}", help="Перевести сообщение"):
+            # Используем уникальный ключ для кнопки
+            if st.button("🔄", key=f"translate_{unique_key}", help="Перевести сообщение"):
                 current_state = st.session_state[translation_key]
                 
                 if current_state["is_translated"]:
