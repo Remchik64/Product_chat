@@ -172,7 +172,7 @@ def submit_question():
             chat_id = st.secrets.flowise.main_chat_id
             api_url = f"{api_base_url}/{chat_id}"
             
-            # Формируем payload
+            # Формируем payload с явным указанием языка
             payload = {
                 "question": user_input,
                 "overrideConfig": {
@@ -180,7 +180,10 @@ def submit_question():
                     "temperature": 0.7,
                     "modelName": "mistral",
                     "maxTokens": 2000,
-                    "systemMessage": "Вы - полезный ассистент, который отвечает на русском языке."
+                    "systemMessage": """Вы - полезный ассистент. 
+                    ВАЖНО: Всегда отвечайте на русском языке, независимо от языка вопроса.
+                    Если получен вопрос на другом языке, сначала переведите его на русский, 
+                    затем дайте ответ на русском языке."""
                 }
             }
             
@@ -194,7 +197,7 @@ def submit_question():
             if "together" in st.secrets and "api_key" in st.secrets["together"]:
                 headers['Authorization'] = f'Bearer {st.secrets.together.api_key}'
             
-            # Отправ��яем запрос
+            # Отправляем запрос
             response = requests.post(api_url, json=payload, headers=headers, timeout=100)
             elapsed_time = int(time.time() - start_time)
             
@@ -219,6 +222,14 @@ def submit_question():
                 if not response_text:
                     st.warning("Получен пустой ответ")
                     return
+                
+                # Добавляем перевод ответа, если он на английском
+                try:
+                    # Проверяем, содержит ли текст английские символы
+                    if any(ord(char) < 128 for char in response_text):
+                        response_text = translate_text(response_text)
+                except Exception as e:
+                    st.error(f"Ошибка при переводе: {str(e)}")
                 
                 # Отображаем и сохраняем ответ
                 with st.chat_message("assistant", avatar=assistant_avatar):
@@ -262,7 +273,7 @@ def submit_question():
         print(f"Network error details: {str(e)}")
         
     except Exception as e:
-        st.error(f"Произошла ошибка: {str(e)}")
+        st.error(f"Проиошла ошибка: {str(e)}")
         print(f"Unexpected error details: {str(e)}")
 
 def translate_text(text):
@@ -420,7 +431,7 @@ def main():
 
     # Заменяем простую кнопку очистки на кнопку с подтверждением
     if st.sidebar.button(
-        "Очистить чат" if not st.session_state.main_clear_chat_confirm else "⚠��� Нажмите еще раз для подтверждения",
+        "Очистить чат" if not st.session_state.main_clear_chat_confirm else "⚠ Нажмите еще раз для подтверждения",
         type="secondary" if not st.session_state.main_clear_chat_confirm else "primary",
         key="main_clear_chat_button"
     ):
@@ -476,7 +487,7 @@ def main():
         "context_messages": context_messages if use_context else 10
     })
 
-    # Поле ввода  возможностью растягивания
+    # Поле ввода  воможностью растягивания
     user_input = st.text_area(
         "Введите ваше сообщение",
         height=100,
@@ -493,7 +504,7 @@ def main():
         # Используем on_click для очистки
         clear_button = st.button("Очистить", key="clear_input", on_click=clear_input, use_container_width=True)
     with col3:
-        # Для кнопки от��ены используем тот же callback
+        # Для кнопки отмены используем тот же callback
         cancel_button = st.button("Отменить", key="cancel_request", on_click=clear_input, use_container_width=True)
 
     # Изменяем логику отправки сообщения

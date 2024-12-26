@@ -61,7 +61,7 @@ def get_user_messages_key():
 def get_api_url():
     """Получение URL API из секретов"""
     try:
-        # Проверяем наличие необходимых параметров
+        # Проверяем наличие ��еобходимых параметров
         if not hasattr(st.secrets, 'flowise'):
             st.error("Секция 'flowise' не найдена в secrets.toml")
             return None
@@ -104,14 +104,17 @@ def query(question):
             st.error("API URL не найден в конфигурации")
             return None
 
-        # Формируем payload для Flowise с дополнительными параметрами
+        # Формируем payload для Flowise с явным указанием языка
         payload = {
             "question": question,
             "overrideConfig": {
                 "temperature": 0.7,
-                "modelName": "mistral",  # Указываем модель
-                "maxTokens": 2000,       # Максимальное количество токенов
-                "systemMessage": "Вы - полезный ассистент, который отвечает на русском языке."
+                "modelName": "mistral",
+                "maxTokens": 2000,
+                "systemMessage": """Вы - полезный ассистент. 
+                ВАЖНО: Всегда отвечайте на русском языке, независимо от языка вопроса.
+                Если получен вопрос на другом языке, сначала переведите его на русский, 
+                затем дайте ответ на русском языке."""
             }
         }
         
@@ -174,7 +177,7 @@ def count_api_responses():
 def sidebar_content():
     """Содержимое боковой панели"""
     with st.sidebar:
-        st.header("Управление чатом")
+        st.header("��правление чатом")
         
         # Отображение информации о пользователе
         if st.session_state.get("email"):
