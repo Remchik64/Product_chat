@@ -1,9 +1,9 @@
 import streamlit as st
 from utils.page_config import setup_pages
-import together  # Изменен импорт
+import requests
+import json
 import os
 from tinydb import TinyDB, Query
-import json
 from utils.chat_database import ChatDatabase
 from utils.utils import get_data_file_path
 
@@ -100,22 +100,6 @@ with st.sidebar.expander("Настройки генерации", expanded=True)
         })
         st.success("Настройки генерации сохранены!")
 
-# Кэширование инициализации Together API
-@st.cache_resource
-def initialize_together_api():
-    try:
-        os.environ["TOGETHER_API_KEY"] = st.secrets["together"]["api_key"]
-        together.api_key = st.secrets["together"]["api_key"]
-        return together
-    except Exception as e:
-        st.error(f"Ошибка инициализации Together API: {str(e)}")
-        return None
-
-# В основном коде
-together_api = initialize_together_api()
-if not together_api:
-    st.stop()
-
 def get_chat_flows(username):
     """Получает список чат-потоков пользователя"""
     user_db = TinyDB(get_data_file_path('user_database.json'))
@@ -174,25 +158,40 @@ def analyze_chat_history(username, chat_id=None, last_n_messages=10):
    - Какие темы стоит развить
    - На что обратить внимание в будущих ответах
 
-Формат ответа должен быть четко структурирован по этим пунктам.
+Формат ответа должен быть четко структур��рован по этим пунктам.
 [/INST]"""
 
     try:
         # Используем настройки из session_state
         settings = st.session_state.model_settings
         
-        # Запрос к модели для анализа
-        response = together_api.Complete.create(
-            model=settings["model"],
-            prompt=analysis_prompt,
-            max_tokens=2048,  # Увеличиваем для более подробного анализа
-            temperature=settings["temperature"],
-            top_p=settings["top_p"],
-            top_k=settings["top_k"],
-            repetition_penalty=settings["repetition_penalty"]
+        # Запрос к OpenRouter API для анализа
+        response = requests.post(
+            url="https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {st.secrets['openrouter']['api_key']}",
+                "Content-Type": "application/json"
+            },
+            data=json.dumps({
+                "model": settings["model"],
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": analysis_prompt
+                    }
+                ],
+                "max_tokens": 2048,
+                "temperature": settings["temperature"],
+                "top_p": settings["top_p"],
+                "n": 1
+            })
         )
         
-        analysis = response['output']['choices'][0]['text'].strip()
+        if response.status_code == 200:
+            response_data = response.json()
+            analysis = response_data['choices'][0]['message']['content'].strip()
+        else:
+            raise Exception(f"Ошибка при анализе контекста. Код ответа: {response.status_code}")
         
         # Добавляем метаданные о чате
         chat_info = ""
@@ -200,7 +199,7 @@ def analyze_chat_history(username, chat_id=None, last_n_messages=10):
             chat_flows = get_chat_flows(username)
             current_chat = next((flow for flow in chat_flows if flow['id'] == chat_id), None)
             if current_chat:
-                chat_info = f"\nАнализ чата: {current_chat['name']}\n"
+                chat_info = f"\nАнал��з чата: {current_chat['name']}\n"
         
         return f"{chat_info}\n{analysis}"
         

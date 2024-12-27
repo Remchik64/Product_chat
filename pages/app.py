@@ -39,8 +39,9 @@ if "authenticated" not in st.session_state or not st.session_state.authenticated
 
 # Инициализация менеджера контекста с проверкой
 context_manager = ContextManager()
-if not context_manager.together_api:
-    st.error("Ошибка: API ключ не настроен. Пожалуйста, обратитесь к администратору.")
+# Проверка наличия ключа OpenRouter API
+if "openrouter" not in st.secrets or "api_key" not in st.secrets["openrouter"]:
+    st.error("Ошибка: API ключ OpenRouter не настроен. Пожалуйста, обратитесь к администратору.")
     st.stop()
 
 # Инициализация session state
@@ -167,38 +168,25 @@ def submit_question():
         start_time = time.time()
         
         with st.spinner('Обрабатываем ваш запрос...'):
-            # Формируем URL API из базового URL и ID чата
-            api_base_url = st.secrets.flowise.api_base_url
-            chat_id = st.secrets.flowise.main_chat_id
-            api_url = f"{api_base_url}/{chat_id}"
-            
-            # Формируем payload с явным указанием языка
-            payload = {
-                "question": user_input,
-                "overrideConfig": {
-                    "returnSourceDocuments": False,
-                    "temperature": 0.7,
-                    "modelName": "mistral",
-                    "maxTokens": 2000,
-                    "systemMessage": """Вы - полезный ассистент. 
-                    ВАЖНО: Всегда отвечайте на русском языке, независимо от языка вопроса.
-                    Если получен вопрос на другом языке, сначала переведите его на русский, 
-                    затем дайте ответ на русском языке."""
-                }
-            }
-            
-            # Добавляем заголовки
+            api_url = "https://openrouter.ai/api/v1/chat/completions"
             headers = {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
+                "Authorization": f"Bearer {st.secrets['openrouter']['api_key']}",
+                "HTTP-Referer": "https://your-site-url.com",  # Замените на URL вашего сайта
+                "X-Title": "Your App Name",  # Замените на название вашего приложения
+                "Content-Type": "application/json"
             }
             
-            # Добавляем API ключ Together AI
-            if "together" in st.secrets and "api_key" in st.secrets["together"]:
-                headers['Authorization'] = f'Bearer {st.secrets.together.api_key}'
+            payload = {
+                "model": st.session_state.get("selected_model", "openai/gpt-3.5-turbo"),
+                "messages": [
+                    {
+                        "role": "user", 
+                        "content": user_input
+                    }
+                ]
+            }
             
-            # Отправляем запрос
-            response = requests.post(api_url, json=payload, headers=headers, timeout=100)
+            response = requests.post(api_url, headers=headers, data=json.dumps(payload), timeout=100)
             elapsed_time = int(time.time() - start_time)
             
             progress_container.info(f"⏱️ Время обработки: {elapsed_time} сек.")
@@ -217,7 +205,7 @@ def submit_question():
                 
             try:
                 output = response.json()
-                response_text = output.get('text', '')
+                response_text = output['choices'][0]['message']['content']
                 
                 if not response_text:
                     st.warning("Получен пустой ответ")
@@ -367,7 +355,7 @@ def main():
     # Отображаем количество генераций в начале
     display_remaining_generations()
 
-    # Добаляем кнопку о��истки чата
+    # Добаляем кнопку очистки чата
     if "main_clear_chat_confirm" not in st.session_state:
         st.session_state.main_clear_chat_confirm = False
 
@@ -420,7 +408,7 @@ def main():
             max_value=30,
             value=st.session_state[MAIN_CHAT_SETTINGS_KEY]["context_messages"],
             key=f"{MAIN_CHAT_SETTINGS_KEY}_slider",
-            help="Количество последних сообщений, которые будут анализироватьс�� для создания контекста."
+            help="Количество последних сообщений, которые будут анализироваться для создания контекста."
         )
 
     # Обновлем настройки в session_state
@@ -467,6 +455,12 @@ def main():
         });
         </script>
         """, unsafe_allow_html=True)
+
+    # Добавим поле для выбора модели и кнопку "Применить модель"
+    model_input = st.text_input("Модель ИИ:", value="openai/gpt-3.5-turbo", key="model_input")
+    if st.button("Применить модель"):
+        st.session_state.selected_model = model_input
+        st.success(f"Выбрана модель: {model_input}")
 
     st.write(f"Streamlit version: {st.__version__}")
 

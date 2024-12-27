@@ -32,8 +32,9 @@ if "authenticated" not in st.session_state or not st.session_state.authenticated
 
 # Инициализация менеджера контекста с проверкой
 context_manager = ContextManager()
-if not context_manager.together_api:
-    st.error("Ошибка: API ключ не настроен. Пожалуйста, обратитесь к администратору.")
+# Проверка наличия ключа OpenRouter API
+if "openrouter" not in st.secrets or "api_key" not in st.secrets["openrouter"]:
+    st.error("Ошибка: API ключ OpenRouter не настроен. Пожалуйста, обратитесь к администратору.")
     st.stop()
 
 # Инициализация путей для аватаров
@@ -165,7 +166,7 @@ def delete_chat_flow(username, flow_id):
     # Обновляем список чатов в базе данных
     user_db.update({'chat_flows': chat_flows}, User.username == username)
     
-    # Удаляем истор��ю чата
+    # Удаляем историю чата
     chat_db = ChatDatabase(f"{username}_{flow_id}")
     chat_db.clear_history()
     
@@ -311,7 +312,7 @@ if "new_chat_delete_confirm" not in st.session_state: # Изменили клю�
 
 # Заменяем кнопку очистки чата
 if st.sidebar.button(
-    "Очистить текущий чат" if not st.session_state.new_chat_clear_confirm else "⚠️ Нажмите еще раз для подтверждения",
+    "Очистить текущий чат" if not st.session_state.new_chat_clear_confirm else "⚠️ Нажмите ��ще раз для подтверждения",
     type="secondary" if not st.session_state.new_chat_clear_confirm else "primary",
     key="new_chat_clear_button"  # Изменили ключ
 ):
@@ -333,7 +334,7 @@ if st.sidebar.button(
     if st.session_state.new_chat_delete_confirm:
         if 'current_chat_flow' in st.session_state:
             if delete_chat_flow(st.session_state.username, st.session_state.current_chat_flow['id']):
-                st.sidebar.success("Чат успешно удал��н!")
+                st.sidebar.success("Чат успешно удален!")
                 if 'current_chat_flow' in st.session_state:
                     del st.session_state.current_chat_flow
                 if 'message_hashes' in st.session_state:
@@ -418,7 +419,7 @@ def submit_message(user_input):
         return
         
     if remaining_generations <= 0:
-        st.error("У вас нет активны�� генераций. Пожалуйста, активируйте новый токен.")
+        st.error("У вас нет активных генераций. Пожалуйста, активируйте новый токен.")
         return
         
     try:
@@ -426,20 +427,26 @@ def submit_message(user_input):
         start_time = time.time()
         
         with st.spinner('Получаем ответ...'):
-            current_chat_id = st.session_state.current_chat_flow['id']
-            api_url = f"{st.secrets['flowise']['base_url']}/api/v1/prediction/{current_chat_id}"
+            api_url = "https://openrouter.ai/api/v1/chat/completions"
             
             payload = {
-                "question": user_input,
-                "overrideConfig": {
-                    "returnSourceDocuments": False
-                }
+                "model": "openai/gpt-3.5-turbo",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": user_input
+                    }
+                ],
+                "max_tokens": 2048,
+                "temperature": 0.7,
+                "top_p": 0.9
             }
             
             headers = {
+                "Authorization": f"Bearer {st.secrets['openrouter']['api_key']}",
                 'Content-Type': 'application/json',
-                'Origin': st.secrets['flowise']['base_url'],
-                'User-Agent': 'Streamlit-Client'
+                "HTTP-Referer": "https://your-site-url.com",
+                "X-Title": "Your App Name"
             }
 
             try:
@@ -456,32 +463,12 @@ def submit_message(user_input):
                 response = requests.post(api_url, json=payload, headers=headers, timeout=100)
                 elapsed_time = int(time.time() - start_time)
                 
-                if response.status_code == 500:
-                    error_details = "Неизвестная ошибка"
-                    try:
-                        error_data = response.json()
-                        error_details = error_data.get('error', 'Внутренняя ошибка сервера')
-                    except:
-                        error_details = response.text[:200]  # Берем первые 200 символов текста ошибки
-                    
-                    st.error(f"""
-                        Ошибка сервера (500). Детали:
-                        - URL: {api_url}
-                        - Ошибка: {error_details}
-                        
-                        Пожалуйста:
-                        1. Проверьте ID чата
-                        2. Убедитесь, что чат активен
-                        3. Попробуйте позже или обратитесь к администратору
-                    """)
-                    return
-
-                elif response.status_code == 200:
+                if response.status_code == 200:
                     progress_container.info(f"⏱️ Время обработки: {elapsed_time} сек.")
                     
                     try:
                         response_data = response.json()
-                        assistant_response = response_data.get('text', '')
+                        assistant_response = response_data['choices'][0]['message']['content']
                         
                         if assistant_response:
                             translated_response = translate_text(assistant_response)
@@ -534,7 +521,7 @@ with col3:
     cancel_button = st.button("Отменить", key="cancel_request", on_click=clear_input, use_container_width=True)
 
 # Изменяем логику отправки сообщения
-if send_button:  # Отправляем только при явном нажатии кнопки
+if send_button:  # Отправляем только ��ри явном нажатии кнопки
     if user_input and user_input.strip():
         st.session_state['_last_input'] = user_input
         submit_message(user_input)

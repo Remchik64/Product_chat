@@ -1,30 +1,29 @@
 import os
 import streamlit as st
 from typing import Optional, List, Dict
-import together
+import requests
+import json
 from functools import lru_cache
 from utils.chat_database import ChatDatabase
 from tinydb import TinyDB, Query
 import time
 
 @lru_cache()
-def initialize_together_api() -> Optional[str]:
-    """Инициализация Together API с обработкой ошибок"""
+def initialize_openrouter_api() -> Optional[str]:
+    """Инициализация OpenRouter API с обработкой ошибок"""
     try:
-        if "together" in st.secrets and "api_key" in st.secrets["together"]:
-            api_key = st.secrets["together"]["api_key"]
-            os.environ["TOGETHER_API_KEY"] = api_key
-            together.api_key = api_key
+        if "openrouter" in st.secrets and "api_key" in st.secrets["openrouter"]:
+            api_key = st.secrets["openrouter"]["api_key"]
             return api_key
         return None
     except Exception as e:
-        print(f"Ошибка при инициализации Together API: {e}")
+        print(f"Ошибка при инициализации OpenRouter API: {e}")
         return None
 
 class ContextManager:
     def __init__(self):
         """Инициализация менеджера контекста с обработкой ошибок"""
-        self.together_api = initialize_together_api()
+        self.openrouter_api_key = initialize_openrouter_api()
         self.default_context = "Вы - профессиональный бизнес-консультант."
 
     def get_context(self, username, message, flow_id=None, context_range=(1, 10)):
@@ -73,7 +72,7 @@ class ContextManager:
 Формат ответа:
 1. Основные темы чата: [перечисли темы]
 2. Ключевые моменты: [важные детали]
-3. Связь с текущим вопросом: [как текущий вопрос связан с контекстом]
+3. Связь с текущим вопросом: [��ак текущий вопрос связан с контекстом]
 4. Релевантная информация: [что важно для ответа]
 
 [/INST]"""
@@ -84,18 +83,30 @@ class ContextManager:
             
             for attempt in range(max_retries):
                 try:
-                    response = self.together_api.Complete.create(
-                        model="meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
-                        prompt=context_prompt,
-                        max_tokens=2048,
-                        temperature=0.2,
-                        top_p=0.9,
-                        top_k=50,
-                        repetition_penalty=1.1
+                    response = requests.post(
+                        url="https://openrouter.ai/api/v1/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {self.openrouter_api_key}",
+                            "Content-Type": "application/json"
+                        },
+                        data=json.dumps({
+                            "model": "openai/gpt-3.5-turbo",
+                            "messages": [
+                                {
+                                    "role": "user",
+                                    "content": context_prompt
+                                }
+                            ],
+                            "max_tokens": 2048,
+                            "temperature": 0.2,
+                            "top_p": 0.9,
+                            "n": 1
+                        })
                     )
                     
-                    if isinstance(response, dict) and 'output' in response:
-                        context_analysis = response['output']['choices'][0]['text'].strip()
+                    if response.status_code == 200:
+                        response_data = response.json()
+                        context_analysis = response_data['choices'][0]['message']['content'].strip()
                         print(f"Получен анализ контекста для чата {chat_db_name}")
                     else:
                         print(f"Неожиданный формат ответа для чата {chat_db_name}")
