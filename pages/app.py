@@ -174,7 +174,7 @@ def submit_question():
             use_context = st.session_state[MAIN_CHAT_SETTINGS_KEY]["use_context"]
             context_messages = st.session_state[MAIN_CHAT_SETTINGS_KEY]["context_messages"]
             
-            # Получаем историю с учетом настроек контекста
+            # Получаем историю с учетом настроек ко��текста
             history = chat_db.get_history()
             if use_context and history:
                 history = history[-context_messages:]
@@ -237,7 +237,7 @@ def submit_question():
                     st.warning("Получен пустой ответ")
                     return
                 
-                # Добавляем перевод о��вета, если он на английском
+                # Добавляем перевод ответа, если он на английском
                 try:
                     # Проверяем, содержит ли текст английские символы
                     if any(ord(char) < 128 for char in response_text):
@@ -282,53 +282,16 @@ def display_message(message, role):
     message_hash = get_message_hash(role, message["content"])
     avatar = assistant_avatar if role == "assistant" else get_user_profile_image(st.session_state.username)
     
-    # Инициализируем состояние перевода для этого сообщения
-    translation_key = f"translation_state_{message_hash}"
-    if translation_key not in st.session_state:
-        st.session_state[translation_key] = {
-            "is_translated": False,
-            "original_text": message["content"],
-            "translated_text": None
-        }
-    
-    with st.chat_message(role, avatar=avatar):
-        cols = st.columns([0.9, 0.05, 0.05])
-        
-        with cols[0]:
-            message_placeholder = st.empty()
-            current_state = st.session_state[translation_key]
-            
-            # Показываем текущий текст в зависимости от состояния перевода
-            if current_state["is_translated"] and current_state["translated_text"]:
-                message_placeholder.markdown(current_state["translated_text"])
-            else:
-                message_placeholder.markdown(current_state["original_text"])
-            
-        with cols[1]:
-            # Кнопка перевода
-            if st.button("🔄", key=f"translate_{message_hash}", help="Перевести сообщение"):
-                current_state = st.session_state[translation_key]
-                
-                if current_state["is_translated"]:
-                    # Возвращаемся к оригинальному тексту
-                    message_placeholder.markdown(current_state["original_text"])
-                    st.session_state[translation_key]["is_translated"] = False
-                else:
-                    # Переводим текст
-                    if not current_state["translated_text"]:
-                        translated_text = translate_text(current_state["original_text"])
-                        st.session_state[translation_key]["translated_text"] = translated_text
-                    
-                    message_placeholder.markdown(st.session_state[translation_key]["translated_text"])
-                    st.session_state[translation_key]["is_translated"] = True
-                
-        with cols[2]:
-            # Кнопка удаления
-            if st.button("🗑", key=f"del_{message_hash}", help="Удалить сообщение"):
-                chat_db.delete_message(message_hash)
-                if "message_hashes" in st.session_state:
-                    st.session_state.message_hashes.remove(message_hash)
-                st.rerun()
+    # Используем функцию из utils.translation
+    if display_message_with_translation(message, message_hash, avatar, role):
+        chat_db.delete_message(message_hash)
+        if "message_hashes" in st.session_state:
+            if message_hash in st.session_state.message_hashes:
+                st.session_state.message_hashes.remove(message_hash)
+            translation_key = f"translation_{message_hash}"
+            if translation_key in st.session_state:
+                del st.session_state[translation_key]
+        st.rerun()
 
 def verify_user_access():
     """Проверка доступа пользователя"""
@@ -387,7 +350,7 @@ def main():
 
     # Заменяем простую кнопку очистки на кнопку с подтверждением
     if st.sidebar.button(
-        "Очистить чат" if not st.session_state.main_clear_chat_confirm else "⚠ Нажмите еще раз для подтверждения",
+        "Очистить чат" if not st.session_state.main_clear_chat_confirm else "⚠ Нажмите еще раз для по��тверждения",
         type="secondary" if not st.session_state.main_clear_chat_confirm else "primary",
         key="main_clear_chat_button"
     ):
@@ -429,7 +392,7 @@ def main():
 
     if use_context:
         context_messages = st.sidebar.slider(
-            "Количество сообщений ��ля анализа",
+            "Количество сообщений для анализа",
             min_value=3,
             max_value=30,
             value=st.session_state[MAIN_CHAT_SETTINGS_KEY]["context_messages"],
@@ -443,7 +406,7 @@ def main():
         "context_messages": context_messages if use_context else 10
     })
 
-    # Поле ввода с возможностью растягивания
+    # Поле ввода с возможностью ра��тягивания
     user_input = st.text_area(
         "Введите ваше сообщение",
         height=100,

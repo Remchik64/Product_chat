@@ -54,12 +54,6 @@ def get_message_hash(role, content):
     """Создает уникальный хэш для сообщения"""
     return hashlib.md5(f"{role}:{content}".encode()).hexdigest()
 
-def display_message(message, role):
-    """Отображает сообщение с кнопками управления"""
-    message_hash = get_message_hash(role, message["content"])
-    avatar = assistant_avatar if role == "assistant" else get_user_profile_image(st.session_state.username)
-    display_message_with_translation(message, message_hash, avatar, role)
-
 def get_user_profile_image(username):
     for ext in ['png', 'jpg', 'jpeg']:
         image_path = os.path.join(PROFILE_IMAGES_DIR, f"{username}.{ext}")
@@ -70,20 +64,22 @@ def get_user_profile_image(username):
                 return "👤"
     return "👤"
 
-def translate_text(text):
-    try:
-        translator = Translator()
-        if text is None or not isinstance(text, str) or text.strip() == '':
-            return "Получен пустой ответ от API"
-            
-        translation = translator.translate(text, dest='ru')
-        if translation and hasattr(translation, 'text') and translation.text:
-            return translation.text
-        return "Ошибка перевода: некорректный ответ от переводчика"
-        
-    except Exception as e:
-        st.error(f"Ошибка при переводе: {str(e)}")
-        return f"Оригинальный текст: {text}"
+def display_message(message, role):
+    """Отображает сообщение с кнопками управления"""
+    message_hash = get_message_hash(role, message["content"])
+    avatar = assistant_avatar if role == "assistant" else get_user_profile_image(st.session_state.username)
+    
+    # Используем функцию из utils.translation
+    if display_message_with_translation(message, message_hash, avatar, role):
+        current_chat_db = ChatDatabase(f"{st.session_state.username}_{st.session_state.current_chat_flow['id']}")
+        current_chat_db.delete_message(message_hash)
+        if "message_hashes" in st.session_state:
+            if message_hash in st.session_state.message_hashes:
+                st.session_state.message_hashes.remove(message_hash)
+            translation_key = f"translation_{message_hash}"
+            if translation_key in st.session_state:
+                del st.session_state[translation_key]
+        st.rerun()
 
 # Функция для сохранения нового чат-потока
 def save_chat_flow(username, flow_id, flow_name=None):
@@ -194,7 +190,7 @@ NEW_CHAT_SETTINGS_KEY = "new_chat_context_settings"
 # Настройки контекста в боковой панели
 st.sidebar.title("Настройки контекста для истории")
 
-# Инициалиация настроек в session_state если их нет
+# Инициал��ация настроек в session_state если их нет
 if NEW_CHAT_SETTINGS_KEY not in st.session_state:
     st.session_state[NEW_CHAT_SETTINGS_KEY] = {
         "use_context": True,
@@ -225,7 +221,7 @@ if use_context:
             value=current_range,  # Используем текущее значение
             step=1,
             key=f"{NEW_CHAT_SETTINGS_KEY}_range",
-            help="Выберите диа��азон сообщений для анализа контекста"
+            help="Выберите диапазон сообщений для анализа контекста"
         )
 
         # Обновляем настройки в session_state
@@ -291,7 +287,7 @@ with st.sidebar.expander("Создать новый чат"):
     new_flow_name = st.text_input("Название чата:")
     new_flow_id = st.text_input(
         "ID чат-потока:",
-        help="Введите на��ример: 28d13206-3a4d-4ef8-80e6-50b671b5766c или закжите сборку чата в https://t.me/startintellect"
+        help="Введите например: 28d13206-3a4d-4ef8-80e6-50b671b5766c или закжите сборку чата в https://t.me/startintellect"
     )
     
     if st.button("Создать") and new_flow_id:
@@ -349,7 +345,7 @@ if st.sidebar.button(
 if st.session_state.new_chat_clear_confirm or st.session_state.new_chat_delete_confirm:  # Изменили ключи
     if st.sidebar.button("Отмена", key="new_chat_cancel_action"):  # Изменили ключ
         st.session_state.new_chat_clear_confirm = False   # Изменили ключ
-        st.session_state.new_chat_delete_confirm = False  # Измени��и ключ
+        st.session_state.new_chat_delete_confirm = False  # Изменили ключ
         st.rerun()
 
 # Проверяем наличие текущего чат-потока
@@ -384,7 +380,7 @@ if 'current_chat_flow' in st.session_state:
 
 # Функция отправки сообщения
 def display_timer():
-    """��тображает анимированный секундомер"""
+    """Отображает анимированный секундомер"""
     placeholder = st.empty()
     for seconds in range(60):
         time_str = f"⏱️ {seconds}с"

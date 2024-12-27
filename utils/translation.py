@@ -1,78 +1,65 @@
 from googletrans import Translator
 import streamlit as st
-import time
 
-def translate_text(text, target_lang='ru'):
-    """
-    Переводит текст на указанный язык
-    target_lang: 'ru' для русского или 'en' для английского
-    """
+def translate_text(text):
+    """Переводит текст между русским и английским языками"""
+    if not text or not isinstance(text, str):
+        return text
+
     try:
         translator = Translator()
         
-        if text is None or not isinstance(text, str) or text.strip() == '':
-            return "Пустой текст для перевода"
-            
         # Определяем язык текста
-        detected_lang = translator.detect(text).lang
+        detected = translator.detect(text)
         
-        # Если текст уже на целевом языке, меняем язык перевода
-        if detected_lang == target_lang:
-            target_lang = 'en' if target_lang == 'ru' else 'ru'
-            
+        # Если текст на русском - переводим на английский, иначе на русский
+        target_lang = 'en' if detected.lang == 'ru' else 'ru'
+        
         translation = translator.translate(text, dest=target_lang)
-        if translation and hasattr(translation, 'text') and translation.text:
+        if translation and hasattr(translation, 'text'):
             return translation.text
-            
-        return f"Ошибка перевода: некорректный ответ от переводчика"
-        
+        return text
     except Exception as e:
-        st.error(f"Ошибка при переводе: {str(e)}")
+        print(f"Ошибка перевода: {str(e)}")
         return text
 
 def display_message_with_translation(message, message_hash, avatar, role):
-    """Отображает сообщение с кнопкой перевода"""
-    # Добавляем timestamp к ключу, чтобы сделать его уникальным
-    unique_key = f"{message_hash}_{int(time.time()*1000)}"
-    
-    # Инициализируем состояние перевода для этого сообщения
-    translation_key = f"translation_state_{message_hash}"
-    if translation_key not in st.session_state:
-        st.session_state[translation_key] = {
-            "is_translated": False,
-            "original_text": message["content"],
-            "translated_text": None
-        }
+    """Отображает сообщение с возможностью перевода"""
+    translation_key = f"translation_{message_hash}"
     
     with st.chat_message(role, avatar=avatar):
-        cols = st.columns([0.95, 0.05])
+        cols = st.columns([0.9, 0.05, 0.05])
         
-        # Создаем placeholder для сообщения в первой колонке
         with cols[0]:
             message_placeholder = st.empty()
-            current_state = st.session_state[translation_key]
             
-            # Показываем текущий текст в зависимости от состояния перевода
-            if current_state["is_translated"] and current_state["translated_text"]:
-                message_placeholder.markdown(current_state["translated_text"])
+            # Проверяем состояние перевода
+            if translation_key not in st.session_state:
+                st.session_state[translation_key] = {
+                    "is_translated": False,
+                    "translated_text": None
+                }
+            
+            # Отображаем текст
+            if st.session_state[translation_key]["is_translated"]:
+                if st.session_state[translation_key]["translated_text"] is None:
+                    translated_text = translate_text(message["content"])
+                    st.session_state[translation_key]["translated_text"] = translated_text
+                message_placeholder.markdown(st.session_state[translation_key]["translated_text"])
             else:
-                message_placeholder.markdown(current_state["original_text"])
-            
-        # Кнопка перевода во второй колонке
+                message_placeholder.markdown(message["content"])
+        
         with cols[1]:
-            # Используем уникальный ключ для кнопки
-            if st.button("🔄", key=f"translate_{unique_key}", help="Перевести сообщение"):
-                current_state = st.session_state[translation_key]
-                
-                if current_state["is_translated"]:
-                    # Возвращаемся к оригинальному тексту
-                    message_placeholder.markdown(current_state["original_text"])
-                    st.session_state[translation_key]["is_translated"] = False
-                else:
-                    # Переводим текст
-                    if not current_state["translated_text"]:
-                        translated_text = translate_text(current_state["original_text"])
-                        st.session_state[translation_key]["translated_text"] = translated_text
-                    
-                    message_placeholder.markdown(st.session_state[translation_key]["translated_text"])
-                    st.session_state[translation_key]["is_translated"] = True 
+            # Кнопка перевода с динамической подсказкой
+            detected_lang = Translator().detect(message["content"]).lang
+            tooltip = "Перевести на английский" if detected_lang == 'ru' else "Перевести на русский"
+            if st.button("🔄", key=f"translate_{message_hash}", help=tooltip):
+                st.session_state[translation_key]["is_translated"] = not st.session_state[translation_key]["is_translated"]
+                st.rerun()
+        
+        with cols[2]:
+            # Кнопка удаления
+            if st.button("🗑", key=f"delete_{message_hash}", help="Удалить сообщение"):
+                return True
+    
+    return False 
