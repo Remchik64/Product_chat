@@ -107,7 +107,7 @@ def get_user_profile_image(username):
     return "👤"  # Возвращаем эмодзи, если изображение не найдено
 
 def get_message_hash(role, content):
-    """Создает уникальный хэш для сообщения"""
+    """Создает уни��альный хэш для сообщения"""
     return hashlib.md5(f"{role}:{content}".encode()).hexdigest()
 
 def display_remaining_generations():
@@ -169,21 +169,47 @@ def submit_question():
         
         with st.spinner('Обрабатываем ваш запрос...'):
             api_url = "https://openrouter.ai/api/v1/chat/completions"
+            
+            # Получаем настройки контекста
+            use_context = st.session_state[MAIN_CHAT_SETTINGS_KEY]["use_context"]
+            context_messages = st.session_state[MAIN_CHAT_SETTINGS_KEY]["context_messages"]
+            
+            # Получаем историю с учетом настроек контекста
+            history = chat_db.get_history()
+            if use_context and history:
+                history = history[-context_messages:]
+            
+            # Формируем системное сообщение с учетом контекста
+            system_message = {
+                "role": "system",
+                "content": "Ты - профессиональный ассистент. Анализируй контекст диалога и давай релевантные ответы."
+            }
+            
+            # Формируем сообщения для API
+            messages = [system_message]
+            if use_context:
+                for msg in history:
+                    messages.append({
+                        "role": msg["role"],
+                        "content": msg["content"]
+                    })
+            
+            # Добавляем текущий вопрос
+            messages.append({
+                "role": "user",
+                "content": user_input
+            })
+            
+            payload = {
+                "model": st.session_state.get("selected_model", "google/gemini-flash-1.5"),
+                "messages": messages
+            }
+            
             headers = {
                 "Authorization": f"Bearer {st.secrets['openrouter']['api_key']}",
                 "HTTP-Referer": "https://your-site-url.com",  # Замените на URL вашего сайта
                 "X-Title": "Your App Name",  # Замените на название вашего приложения
                 "Content-Type": "application/json"
-            }
-            
-            payload = {
-                "model": st.session_state.get("selected_model", "google/gemini-flash-1.5"),
-                "messages": [
-                    {
-                        "role": "user", 
-                        "content": user_input
-                    }
-                ]
             }
             
             response = requests.post(api_url, headers=headers, data=json.dumps(payload), timeout=100)
@@ -211,7 +237,7 @@ def submit_question():
                     st.warning("Получен пустой ответ")
                     return
                 
-                # Добавляем перевод ответа, если он на английском
+                # Добавляем перевод о��вета, если он на английском
                 try:
                     # Проверяем, содержит ли текст английские символы
                     if any(ord(char) < 128 for char in response_text):
@@ -403,7 +429,7 @@ def main():
 
     if use_context:
         context_messages = st.sidebar.slider(
-            "Количество сообщений для анализа",
+            "Количество сообщений ��ля анализа",
             min_value=3,
             max_value=30,
             value=st.session_state[MAIN_CHAT_SETTINGS_KEY]["context_messages"],

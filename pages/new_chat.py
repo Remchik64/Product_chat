@@ -225,7 +225,7 @@ if use_context:
             value=current_range,  # Используем текущее значение
             step=1,
             key=f"{NEW_CHAT_SETTINGS_KEY}_range",
-            help="Выберите диапазон сообщений для анализа контекста"
+            help="Выберите диа��азон сообщений для анализа контекста"
         )
 
         # Обновляем настройки в session_state
@@ -291,7 +291,7 @@ with st.sidebar.expander("Создать новый чат"):
     new_flow_name = st.text_input("Название чата:")
     new_flow_id = st.text_input(
         "ID чат-потока:",
-        help="Введите например: 28d13206-3a4d-4ef8-80e6-50b671b5766c или закжите сборку чата в https://t.me/startintellect"
+        help="Введите на��ример: 28d13206-3a4d-4ef8-80e6-50b671b5766c или закжите сборку чата в https://t.me/startintellect"
     )
     
     if st.button("Создать") and new_flow_id:
@@ -349,7 +349,7 @@ if st.sidebar.button(
 if st.session_state.new_chat_clear_confirm or st.session_state.new_chat_delete_confirm:  # Изменили ключи
     if st.sidebar.button("Отмена", key="new_chat_cancel_action"):  # Изменили ключ
         st.session_state.new_chat_clear_confirm = False   # Изменили ключ
-        st.session_state.new_chat_delete_confirm = False  # Изменили ключ
+        st.session_state.new_chat_delete_confirm = False  # Измени��и ключ
         st.rerun()
 
 # Проверяем наличие текущего чат-потока
@@ -384,7 +384,7 @@ if 'current_chat_flow' in st.session_state:
 
 # Функция отправки сообщения
 def display_timer():
-    """Отображает анимированный секундомер"""
+    """��тображает анимированный секундомер"""
     placeholder = st.empty()
     for seconds in range(60):
         time_str = f"⏱️ {seconds}с"
@@ -429,14 +429,35 @@ def submit_message(user_input):
         with st.spinner('Получаем ответ...'):
             api_url = "https://openrouter.ai/api/v1/chat/completions"
             
+            # Получаем историю чата
+            current_chat_id = st.session_state.current_chat_flow['id']
+            chat_db = ChatDatabase(f"{st.session_state.username}_{current_chat_id}")
+            history = chat_db.get_history()
+            
+            # Формируем сообщения для API с историей
+            messages = []
+            # Добавляем системное сообщение
+            messages.append({
+                "role": "system",
+                "content": "Ты - полезный ассистент. Используй контекст предыдущих сообщений для предоставления связных и контекстно-зависимых ответов."
+            })
+            
+            # Добавляем историю сообщений
+            for msg in history[-10:]:  # Берем последние 10 сообщений
+                messages.append({
+                    "role": msg["role"],
+                    "content": msg["content"]
+                })
+            
+            # Добавляем текущий вопрос пользователя
+            messages.append({
+                "role": "user",
+                "content": user_input
+            })
+            
             payload = {
                 "model": "google/gemini-flash-1.5",
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": user_input
-                    }
-                ],
+                "messages": messages,
                 "max_tokens": 2048,
                 "temperature": 0.7,
                 "top_p": 0.9
@@ -445,8 +466,8 @@ def submit_message(user_input):
             headers = {
                 "Authorization": f"Bearer {st.secrets['openrouter']['api_key']}",
                 'Content-Type': 'application/json',
-                "HTTP-Referer": "https://your-site-url.com",
-                "X-Title": "Your App Name"
+                "HTTP-Referer": "https://github.com/cursor-ai",
+                "X-Title": "Personal Assistant"
             }
 
             try:
