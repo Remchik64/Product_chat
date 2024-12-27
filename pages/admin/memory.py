@@ -23,7 +23,7 @@ st.sidebar.title("Настройки модели")
 # Выбор модели
 if "model_settings" not in st.session_state:
     st.session_state.model_settings = {
-        "model": "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
+        "model": "google/gemini-flash-1.5",
         "max_tokens": 512,
         "temperature": 0.2,
         "top_p": 0.9,
@@ -34,8 +34,8 @@ if "model_settings" not in st.session_state:
 model = st.sidebar.selectbox(
     "Выберите модель:",
     [
-        "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
-        "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
+        "mistralai/ministral-8b",
+        "google/gemini-flash-1.5-exp",
     ],
     index=0,
     key="model_select"
@@ -199,7 +199,7 @@ def analyze_chat_history(username, chat_id=None, last_n_messages=10):
             chat_flows = get_chat_flows(username)
             current_chat = next((flow for flow in chat_flows if flow['id'] == chat_id), None)
             if current_chat:
-                chat_info = f"\nАнал��з чата: {current_chat['name']}\n"
+                chat_info = f"\nАнализ чата: {current_chat['name']}\n"
         
         return f"{chat_info}\n{analysis}"
         

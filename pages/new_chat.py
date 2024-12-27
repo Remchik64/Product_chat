@@ -312,7 +312,7 @@ if "new_chat_delete_confirm" not in st.session_state: # Изменили клю�
 
 # Заменяем кнопку очистки чата
 if st.sidebar.button(
-    "Очистить текущий чат" if not st.session_state.new_chat_clear_confirm else "⚠️ Нажмите ��ще раз для подтверждения",
+    "Очистить текущий чат" if not st.session_state.new_chat_clear_confirm else "⚠️ Нажмите еще раз для подтверждения",
     type="secondary" if not st.session_state.new_chat_clear_confirm else "primary",
     key="new_chat_clear_button"  # Изменили ключ
 ):
@@ -430,7 +430,7 @@ def submit_message(user_input):
             api_url = "https://openrouter.ai/api/v1/chat/completions"
             
             payload = {
-                "model": "openai/gpt-3.5-turbo",
+                "model": "google/gemini-flash-1.5",
                 "messages": [
                     {
                         "role": "user",
@@ -521,7 +521,7 @@ with col3:
     cancel_button = st.button("Отменить", key="cancel_request", on_click=clear_input, use_container_width=True)
 
 # Изменяем логику отправки сообщения
-if send_button:  # Отправляем только ��ри явном нажатии кнопки
+if send_button:  # Отправляем только при явном нажатии кнопки
     if user_input and user_input.strip():
         st.session_state['_last_input'] = user_input
         submit_message(user_input)

@@ -177,7 +177,7 @@ def submit_question():
             }
             
             payload = {
-                "model": st.session_state.get("selected_model", "openai/gpt-3.5-turbo"),
+                "model": st.session_state.get("selected_model", "google/gemini-flash-1.5"),
                 "messages": [
                     {
                         "role": "user", 
@@ -457,7 +457,7 @@ def main():
         """, unsafe_allow_html=True)
 
     # Добавим поле для выбора модели и кнопку "Применить модель"
-    model_input = st.text_input("Модель ИИ:", value="openai/gpt-3.5-turbo", key="model_input")
+    model_input = st.text_input("Модель ИИ:", value="google/gemini-flash-1.5", key="model_input")
     if st.button("Применить модель"):
         st.session_state.selected_model = model_input
         st.success(f"Выбрана модель: {model_input}")
