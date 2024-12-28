@@ -31,7 +31,7 @@ else:
     assistant_avatar = "🤖"
 
 def get_user_profile_image(username):
-    """Получение изображения профиля пользователя"""
+    """Получение изображения профиля польз��вателя"""
     for ext in ['png', 'jpg', 'jpeg']:
         image_path = os.path.join(PROFILE_IMAGES_DIR, f"{username}.{ext}")
         if os.path.exists(image_path):
@@ -162,7 +162,7 @@ def sidebar_content():
 
 def translate_text(text, target_lang='ru'):
     """
-    Переводит текст на указанный язык
+    Переводит текст на указанный я��ык
     target_lang: 'ru' для русского или 'en' для английского
     """
     try:
@@ -203,7 +203,7 @@ def display_message_with_translation(message):
         }
     
     with st.chat_message(message["role"], avatar=avatar):
-        cols = st.columns([0.95, 0.05])
+        cols = st.columns([0.9, 0.1])
         
         # Создаем placeholder для сообщения в первой колонке
         with cols[0]:
@@ -240,7 +240,7 @@ def get_message_hash(role, content):
 
 def main():
     """Основная функция приложения"""
-    # Ин��циализация ключа для сообщений
+    # Инциализация ключа для сообщений
     messages_key = get_user_messages_key()
     if messages_key not in st.session_state:
         st.session_state[messages_key] = []
@@ -253,12 +253,7 @@ def main():
     
     # Отображение истории сообщений
     for message in st.session_state[messages_key]:
-        role = message["role"]
-        content = message["content"]
-        avatar = assistant_avatar if role == "assistant" else get_user_profile_image(st.session_state.get("username", ""))
-        
-        with st.chat_message(role, avatar=avatar):
-            st.markdown(content)
+        display_message_with_translation(message)
     
     # Проверяем лимит ответов
     if count_api_responses() >= MAX_API_RESPONSES:
@@ -269,27 +264,22 @@ def main():
     user_input = st.chat_input("Введите ваш вопрос...")
     
     if user_input:
-        # Отображаем сообщение пользователя
-        with st.chat_message("user", avatar=get_user_profile_image(st.session_state.get("username", ""))):
-            st.markdown(user_input)
-        
         # Добавляем сообщение пользователя в историю
         user_message = {"role": "user", "content": user_input}
         st.session_state[messages_key].append(user_message)
         
         # Получаем ответ от API
-        with st.chat_message("assistant", avatar=assistant_avatar):
-            with st.spinner("Думаю..."):
-                response = query(user_input)
-                
-                if response:
-                    full_response = response.get("text", "Извините, произошла ошибка при получении ответа")
-                    # Добавление ответа ассистента в историю
-                    assistant_message = {"role": "assistant", "content": full_response}
-                    st.session_state[messages_key].append(assistant_message)
-                    st.markdown(full_response)
-                else:
-                    st.error("Не удалось получить ответ от API")
+        with st.spinner("Думаю..."):
+            response = query(user_input)
+            
+            if response:
+                full_response = response.get("text", "Извините, произошла ошибка при получении ответа")
+                # Добавление ответа ассистента в историю
+                assistant_message = {"role": "assistant", "content": full_response}
+                st.session_state[messages_key].append(assistant_message)
+                st.rerun()  # Перезагружаем страницу для отображения нового сообщения
+            else:
+                st.error("Не удалось получить ответ от API")
 
 if __name__ == "__main__":
     main() 

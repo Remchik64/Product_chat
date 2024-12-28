@@ -13,6 +13,7 @@ from datetime import datetime
 from utils.page_config import setup_pages
 import time
 from utils.translation import translate_text, display_message_with_translation
+import unicodedata
 
 # Настройка страницы
 st.set_page_config(
@@ -83,30 +84,20 @@ def display_message(message, role):
 
 # Функция для сохранения нового чат-потока
 def save_chat_flow(username, flow_id, flow_name=None):
+    """Сохраняет новый чат-поток"""
     user = user_db.get(User.username == username)
     if not user:
         return False
         
     chat_flows = user.get('chat_flows', [])
     
-    if not flow_name:
+    # Используем пользовательское имя или создаем стандартное
+    if not flow_name or flow_name.strip() == "":
         flow_name = f"Чат {len(chat_flows) + 1}"
-    else:
-        # Убеждаемся, что имя в правильной кодировке
-        try:
-            # Если строка уже в UTF-8, оставляем как есть
-            if not isinstance(flow_name, str):
-                flow_name = str(flow_name)
-            flow_name = flow_name.encode('utf-8').decode('utf-8')
-        except:
-            try:
-                flow_name = flow_name.encode('cp1251').decode('utf-8')
-            except:
-                pass
     
     new_flow = {
         'id': flow_id,
-        'name': flow_name,
+        'name': flow_name,  # Сохраняем имя как есть
         'created_at': datetime.now().isoformat()
     }
     
@@ -116,26 +107,12 @@ def save_chat_flow(username, flow_id, flow_name=None):
 
 # Функция для получения списка чат-потоков пользователя
 def get_user_chat_flows(username):
+    """Получение списка чат-потоков пользователя"""
     user = user_db.get(User.username == username)
     if not user:
         return []
     
-    chat_flows = user.get('chat_flows', [])
-    # Исправляем кодировку имен чатов
-    for flow in chat_flows:
-        try:
-            name = flow['name']
-            if not isinstance(name, str):
-                name = str(name)
-            # Если строка уже в UTF-8, оставляем как есть
-            flow['name'] = name.encode('utf-8').decode('utf-8')
-        except:
-            try:
-                flow['name'] = name.encode('cp1251').decode('utf-8')
-            except:
-                pass
-    
-    return chat_flows
+    return user.get('chat_flows', [])  # Возвращаем чаты как есть, без модификации
 
 # Функция для очистки истории конкретного чата
 def clear_chat_history(username, flow_id):
@@ -247,38 +224,29 @@ st.sidebar.title("Управление чат-потоками")
 # Выбор существующего чат-потока
 chat_flows = get_user_chat_flows(st.session_state.username)
 if chat_flows:
-    flow_names = [flow['name'] for flow in chat_flows]
-    
     # Определяем текущий индекс
     current_index = 0
     if 'current_chat_flow' in st.session_state:
-        try:
-            current_flow_name = st.session_state.current_chat_flow['name']
-            if current_flow_name in flow_names:
-                current_index = flow_names.index(current_flow_name)
-        except:
-            current_index = 0
-    
-    selected_flow_name = st.sidebar.radio(
+        current_flow = st.session_state.current_chat_flow
+        for i, flow in enumerate(chat_flows):
+            if flow['id'] == current_flow['id']:
+                current_index = i
+                break
+
+    # Отображаем только имена чатов
+    selected_flow = st.sidebar.radio(
         "Выберите чат:",
-        flow_names,
+        options=chat_flows,
+        format_func=lambda x: x.get('name', 'Новый чат'),  # Показываем только имя чата
         index=current_index
     )
     
-    selected_flow = next(
-        (flow for flow in chat_flows if flow['name'] == selected_flow_name),
-        chat_flows[0]
-    )
-    
-    # Проверяем, изменился ли выбранный чат
+    # Обновляем текущий чат при выборе
     if ('current_chat_flow' not in st.session_state or 
         st.session_state.current_chat_flow['id'] != selected_flow['id']):
-        # Обноляем текущий чат
         st.session_state.current_chat_flow = selected_flow
-        # Очищаем историю сообщений предыдущего чата
         if "message_hashes" in st.session_state:
             del st.session_state.message_hashes
-        # Перезагружаем страницу для отображения новой истории
         st.rerun()
 
 # Создание нового чат-потока
@@ -286,15 +254,16 @@ st.sidebar.markdown("---")
 with st.sidebar.expander("Создать новый чат"):
     new_flow_name = st.text_input("Название чата:")
     new_flow_id = st.text_input(
-        "ID чат-потока:",
-        help="Введите например: 28d13206-3a4d-4ef8-80e6-50b671b5766c или закжите сборку чата в https://t.me/startintellect"
+        "ID чата:",
+        help="Введите ID чата или закажите сборку в https://t.me/startintellect",
+        type="password"  # Скрываем ID от пользователя
     )
     
     if st.button("Создать") and new_flow_id:
         if save_chat_flow(st.session_state.username, new_flow_id, new_flow_name):
             st.session_state.current_chat_flow = {
                 'id': new_flow_id,
-                'name': new_flow_name or f"Чат {len(chat_flows) + 1}"
+                'name': new_flow_name if new_flow_name else f"Чат {len(chat_flows) + 1}"
             }
             chat_db = ChatDatabase(f"{st.session_state.username}_{new_flow_id}")
             st.success("Новый чат создан!")
@@ -435,7 +404,7 @@ def submit_message(user_input):
             # Добавляем системное сообщение
             messages.append({
                 "role": "system",
-                "content": "Ты - полезный ассистент. Используй контекст предыдущих сообщений дл�� предоставления связных и контекстно-зависимых ответов."
+                "content": "Ты - полезный ассистент. Используй контекст предыдущих сообщений для предоставления связных и контекстно-зависимых ответов."
             })
             
             # Добавляем историю сообщений
@@ -531,7 +500,7 @@ col1, col2, col3 = st.columns(3)
 with col1:
     send_button = st.button("Отправить", key="send_message", use_container_width=True)
 with col2:
-    # Используем on_click для очистк��
+    # Используем on_click для очистки
     clear_button = st.button("Очистить", key="clear_input", on_click=clear_input, use_container_width=True)
 with col3:
     # Для кнопки отмены используем тот же callback
@@ -542,3 +511,21 @@ if send_button:  # Отправляем только при явном нажа�
     if user_input and user_input.strip():
         st.session_state['_last_input'] = user_input
         submit_message(user_input)
+
+def normalize_text(text):
+    """Нормализует текст, исправляя проблемы с кодировкой"""
+    if isinstance(text, bytes):
+        try:
+            text = text.decode('utf-8')
+        except UnicodeDecodeError:
+            try:
+                text = text.decode('cp1251')
+            except UnicodeDecodeError:
+                return None
+    elif not isinstance(text, str):
+        text = str(text)
+    
+    # Нормализуем Unicode и удаляем проблемные символы
+    text = unicodedata.normalize('NFKD', text)
+    # Конвертируем обратно в UTF-8 и декодируем
+    return text.encode('utf-8', errors='ignore').decode('utf-8')
