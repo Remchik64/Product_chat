@@ -7,9 +7,15 @@ font="monospace"
 [server]
 enableCORS=false
 enableXsrfProtection=true
+port = 80
+address = "0.0.0.0"
 
 [runner]
 fastReruns=true
 
 [client]
 toolbarMode="auto"
+
+[browser]
+serverAddress = "0.0.0.0"
+serverPort = 80
