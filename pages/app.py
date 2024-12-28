@@ -445,12 +445,6 @@ def main():
         </script>
         """, unsafe_allow_html=True)
 
-    # Добавим поле для выбора модели и кнопку "Применить модель"
-    model_input = st.text_input("Модель ИИ:", value="google/gemini-flash-1.5", key="model_input")
-    if st.button("Применить модель"):
-        st.session_state.selected_model = model_input
-        st.success(f"Выбрана модель: {model_input}")
-
     st.write(f"Streamlit version: {st.__version__}")
 
 if __name__ == "__main__":
