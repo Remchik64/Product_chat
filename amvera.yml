@@ -11,23 +11,11 @@ run:
   containerPort: 80
   resources:
     limits:
-      cpu: "1"
-      memory: "1024Mi"
+      cpu: 1
+      memory: 1024Mi
   persistentStorage:
-    - path: /app/chat
-      size: 1Gi
+  - path: /app/chat
+    size: 1Gi
   env:
-    - name: PYTHONUNBUFFERED
-      value: "1"
-secrets:
-  - name: STREAMLIT_SECRETS
-    mountPath: /app/.streamlit/secrets.toml
-    content: |
-      [flowise]
-      base_url = "https://flowise-renataraev64.amvera.io"
-      chatflow_id = "fc24280f-f41c-4121-b1fb-c41176a726e9"
-      api_url = "https://flowise-renataraev64.amvera.io/api/v1/prediction/f2a3b16a-9682-42fa-bbca-07082c0fb6aa"
-
-      [admin]
-      admin_username = "Remass164"
-      admin_password = "01122011.Rem/164"
+  - name: PYTHONUNBUFFERED
+    value: 1
