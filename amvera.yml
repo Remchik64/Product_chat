@@ -7,7 +7,6 @@ meta:
 build:
   requirementsPath: requirements.txt
 run:
-  command: bash deploy.sh
   containerPort: 80
   resources:
     limits:
@@ -19,3 +18,4 @@ run:
   env:
   - name: PYTHONUNBUFFERED
     value: 1
+  command: python main.py
