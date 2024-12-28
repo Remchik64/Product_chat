@@ -31,7 +31,7 @@ else:
     assistant_avatar = "🤖"
 
 def get_user_profile_image(username):
-    """Получение изображения профиля пользователя"""
+    """Получение изображения профиля польз��вателя"""
     for ext in ['png', 'jpg', 'jpeg']:
         image_path = os.path.join(PROFILE_IMAGES_DIR, f"{username}.{ext}")
         if os.path.exists(image_path):
@@ -90,7 +90,7 @@ def get_api_url():
         return full_url
     except Exception as e:
         st.error(f"Ошибка при получении URL API: {str(e)}")
-        # Выводим дополнительную отладочную информацию
+        # Выводим дополнительную отладочну�� информацию
         print(f"Доступные секции в secrets: {dir(st.secrets)}")
         if hasattr(st.secrets, 'flowise'):
             print(f"Доступные параметры в flowise: {dir(st.secrets.flowise)}")
@@ -156,7 +156,7 @@ def sidebar_content():
     with st.sidebar:
         st.header("Управление чатом")
         
-        # Отображение инфо��мации о пользователе
+        # Отображение информации о пользователе
         if st.session_state.get("email"):
             user_avatar = get_user_profile_image(st.session_state.get("username", ""))
             col1, col2 = st.columns([1, 3])
@@ -212,7 +212,7 @@ def display_message_with_translation(message):
     message_hash = get_message_hash(message["role"], message["content"])
     avatar = assistant_avatar if message["role"] == "assistant" else get_user_profile_image(st.session_state.get("username", ""))
     
-    # Инициализируем состояние перевода для этого сообщения
+    # Ини��иализируем состояние перевода для этого сообщения
     translation_key = f"translation_state_{message_hash}"
     if translation_key not in st.session_state:
         st.session_state[translation_key] = {
@@ -222,7 +222,8 @@ def display_message_with_translation(message):
         }
     
     with st.chat_message(message["role"], avatar=avatar):
-        cols = st.columns([0.95, 0.05])
+        # Изменяем соотношение колонок для лучшей видимости кнопки
+        cols = st.columns([0.9, 0.1])  # Меняем с [0.95, 0.05] на [0.9, 0.1]
         
         # Создаем placeholder для сообщения в первой колонке
         with cols[0]:
@@ -235,8 +236,21 @@ def display_message_with_translation(message):
             else:
                 message_placeholder.markdown(current_state["original_text"])
             
-        # Кнопка перевода во второй колонке
+        # Кнопка перевода во второй колонке с улучшенным стилем
         with cols[1]:
+            st.markdown(
+                """
+                <style>
+                div.stButton > button {
+                    width: 40px;
+                    height: 40px;
+                    padding: 0px;
+                    border-radius: 50%;
+                }
+                </style>
+                """,
+                unsafe_allow_html=True
+            )
             if st.button("🔄", key=f"translate_{message_hash}", help="Перевести сообщение"):
                 current_state = st.session_state[translation_key]
                 
@@ -286,7 +300,7 @@ def main():
     for message in st.session_state[messages_key]:
         display_message_with_translation(message)
 
-    # Про��еряем лимит ответов
+    # Проверяем лимит ответов
     if count_api_responses() >= MAX_API_RESPONSES:
         st.warning("⚠️ Достигнут лимит ответов. Пожалуйста, очистите историю чата для продолжения общения.")
         return
