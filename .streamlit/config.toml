@@ -3,12 +3,9 @@ base="dark"
 primaryColor="#0ac398"
 font="monospace"
 
-
 [server]
-enableCORS=false
-enableXsrfProtection=true
+enableXsrfProtection=false
 port = 80
-address = "0.0.0.0"
 
 [runner]
 fastReruns=true
