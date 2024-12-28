@@ -134,7 +134,7 @@ def analyze_chat_history(username, chat_id=None, last_n_messages=10):
     История диалога:
     {history_text}
 
-Пожалуйста, предоставь структурированный анализ по следующим пунктам:
+Пожалуйста, предоставь структурированный анализ по следующим пун��там:
 
 1. Основные темы диалога:
    - Перечисли все обсуждаемые темы
@@ -170,6 +170,8 @@ def analyze_chat_history(username, chat_id=None, last_n_messages=10):
             url="https://openrouter.ai/api/v1/chat/completions",
             headers={
                 "Authorization": f"Bearer {st.secrets['openrouter']['api_key']}",
+                "HTTP-Referer": "https://github.com/cursor-ai",
+                "X-Title": "Cursor AI Assistant",
                 "Content-Type": "application/json"
             },
             data=json.dumps({
@@ -204,7 +206,7 @@ def analyze_chat_history(username, chat_id=None, last_n_messages=10):
         return f"{chat_info}\n{analysis}"
         
     except Exception as e:
-        st.error(f"Ошибка при анализе истории: {str(e)}")
+        st.error(f"Ошибка при анализе ист��рии: {str(e)}")
         return None
 
 def inject_context(original_message, context, chat_name=None):
@@ -220,7 +222,7 @@ def inject_context(original_message, context, chat_name=None):
 Используя предоставленный анализ контекста, сформируй подробный и связный ответ.
 Убедись, что ответ:
 1. Учитывает всю релевантную информацию из истории диалога
-2. Логически связан с предыдущими тем��ми
+2. Логически связан с предыдущими темами
 3. Развивает обсуждение в правильном направлении
 4. Отвечает на текущий вопрос с учетом полного контекста"""
 

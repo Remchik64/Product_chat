@@ -107,7 +107,7 @@ def get_user_profile_image(username):
     return "👤"  # Возвращаем эмодзи, если изображение не найдено
 
 def get_message_hash(role, content):
-    """Создает уни��альный хэш для сообщения"""
+    """Создает уникальный хэш для сообщения"""
     return hashlib.md5(f"{role}:{content}".encode()).hexdigest()
 
 def display_remaining_generations():
@@ -174,7 +174,7 @@ def submit_question():
             use_context = st.session_state[MAIN_CHAT_SETTINGS_KEY]["use_context"]
             context_messages = st.session_state[MAIN_CHAT_SETTINGS_KEY]["context_messages"]
             
-            # Получаем историю с учетом настроек ко��текста
+            # Получаем историю с учетом настроек контекста
             history = chat_db.get_history()
             if use_context and history:
                 history = history[-context_messages:]
@@ -207,8 +207,8 @@ def submit_question():
             
             headers = {
                 "Authorization": f"Bearer {st.secrets['openrouter']['api_key']}",
-                "HTTP-Referer": "https://your-site-url.com",  # Замените на URL вашего сайта
-                "X-Title": "Your App Name",  # Замените на название вашего приложения
+                "HTTP-Referer": "https://github.com/cursor-ai",
+                "X-Title": "Cursor AI Assistant",
                 "Content-Type": "application/json"
             }
             
@@ -350,7 +350,7 @@ def main():
 
     # Заменяем простую кнопку очистки на кнопку с подтверждением
     if st.sidebar.button(
-        "Очистить чат" if not st.session_state.main_clear_chat_confirm else "⚠ Нажмите еще раз для по��тверждения",
+        "Очистить чат" if not st.session_state.main_clear_chat_confirm else "⚠ Нажмите еще раз для подтверждения",
         type="secondary" if not st.session_state.main_clear_chat_confirm else "primary",
         key="main_clear_chat_button"
     ):
@@ -406,7 +406,7 @@ def main():
         "context_messages": context_messages if use_context else 10
     })
 
-    # Поле ввода с возможностью ра��тягивания
+    # Поле ввода с возможностью растягивания
     user_input = st.text_area(
         "Введите ваше сообщение",
         height=100,

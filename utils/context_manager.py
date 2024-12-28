@@ -83,6 +83,8 @@ class ContextManager:
                         url="https://openrouter.ai/api/v1/chat/completions",
                         headers={
                             "Authorization": f"Bearer {self.openrouter_api_key}",
+                            "HTTP-Referer": "https://github.com/cursor-ai",
+                            "X-Title": "Cursor AI Assistant",
                             "Content-Type": "application/json"
                         },
                         data=json.dumps({

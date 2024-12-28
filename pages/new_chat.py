@@ -190,7 +190,7 @@ NEW_CHAT_SETTINGS_KEY = "new_chat_context_settings"
 # Настройки контекста в боковой панели
 st.sidebar.title("Настройки контекста для истории")
 
-# Инициал��ация настроек в session_state если их нет
+# Инициализация настроек в session_state если их нет
 if NEW_CHAT_SETTINGS_KEY not in st.session_state:
     st.session_state[NEW_CHAT_SETTINGS_KEY] = {
         "use_context": True,
@@ -435,7 +435,7 @@ def submit_message(user_input):
             # Добавляем системное сообщение
             messages.append({
                 "role": "system",
-                "content": "Ты - полезный ассистент. Используй контекст предыдущих сообщений для предоставления связных и контекстно-зависимых ответов."
+                "content": "Ты - полезный ассистент. Используй контекст предыдущих сообщений дл�� предоставления связных и контекстно-зависимых ответов."
             })
             
             # Добавляем историю сообщений
@@ -461,9 +461,9 @@ def submit_message(user_input):
             
             headers = {
                 "Authorization": f"Bearer {st.secrets['openrouter']['api_key']}",
-                'Content-Type': 'application/json',
                 "HTTP-Referer": "https://github.com/cursor-ai",
-                "X-Title": "Personal Assistant"
+                "X-Title": "Cursor AI Assistant",
+                "Content-Type": "application/json"
             }
 
             try:
@@ -477,7 +477,7 @@ def submit_message(user_input):
                     current_chat_db.add_message("user", user_input)
 
                 # Отправляем запрос
-                response = requests.post(api_url, json=payload, headers=headers, timeout=100)
+                response = requests.post(api_url, headers=headers, json=payload)
                 elapsed_time = int(time.time() - start_time)
                 
                 if response.status_code == 200:
@@ -531,7 +531,7 @@ col1, col2, col3 = st.columns(3)
 with col1:
     send_button = st.button("Отправить", key="send_message", use_container_width=True)
 with col2:
-    # Используем on_click для очистки
+    # Используем on_click для очистк��
     clear_button = st.button("Очистить", key="clear_input", on_click=clear_input, use_container_width=True)
 with col3:
     # Для кнопки отмены используем тот же callback
