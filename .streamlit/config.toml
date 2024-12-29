@@ -8,11 +8,16 @@ enableCORS=false
 enableXsrfProtection=true
 port = 80
 address = "0.0.0.0"
+maxUploadSize = 200
+fileWatcherType = "none"
 
 [runner]
 fastReruns=true
 
 [client]
 toolbarMode="auto"
+
+[logger]
+level = "error"
 
 
