@@ -6,8 +6,7 @@ font="monospace"
 [server]
 enableCORS=false
 enableXsrfProtection=true
-port = 80
-address = "0.0.0.0"
+
 fileWatcherType = "none"
 
 [runner]
