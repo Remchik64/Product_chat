@@ -69,6 +69,16 @@ def display_message(message, role):
     message_hash = get_message_hash(role, message["content"])
     avatar = assistant_avatar if role == "assistant" else get_user_profile_image(st.session_state.username)
     
+    # Добавляем уникальный идентификатор для каждого сообщения в текущем чате
+    chat_id = st.session_state.current_chat_flow['id']
+    message_key = f"{chat_id}_{message_hash}"
+    
+    if 'message_ids' not in st.session_state:
+        st.session_state.message_ids = {}
+    
+    if message_key not in st.session_state.message_ids:
+        st.session_state.message_ids[message_key] = len(st.session_state.message_ids)
+    
     # Добавляем номер сообщения
     if 'message_counter' not in st.session_state:
         st.session_state.message_counter = 1
@@ -81,8 +91,11 @@ def display_message(message, role):
         "content": f"{message['content']}\n\n*Сообщение #{st.session_state.message_counter}*"
     }
     
+    # Создаем уникальный ключ для кнопки перевода
+    button_key = f"translate_{message_key}_{st.session_state.message_ids[message_key]}_{role}"
+    
     # Используем функцию из utils.translation с пронумерованным сообщением
-    if display_message_with_translation(message_with_number, message_hash, avatar, role):
+    if display_message_with_translation(message_with_number, message_hash, avatar, role, button_key):
         current_chat_db = ChatDatabase(f"{st.session_state.username}_{st.session_state.current_chat_flow['id']}")
         current_chat_db.delete_message(message_hash)
         if "message_hashes" in st.session_state:
@@ -104,9 +117,7 @@ def save_chat_flow(username, flow_id, flow_name=None):
     if not flow_name:
         flow_name = f"Чат {len(chat_flows) + 1}"
     else:
-        # Убеждаемся, что имя в правильной кодировке
         try:
-            # Если строка уже в UTF-8, оставляем как есть
             if not isinstance(flow_name, str):
                 flow_name = str(flow_name)
             flow_name = flow_name.encode('utf-8').decode('utf-8')
@@ -116,15 +127,34 @@ def save_chat_flow(username, flow_id, flow_name=None):
             except:
                 pass
     
+    # Добавляем настройки контекста при создании чата
     new_flow = {
         'id': flow_id,
         'name': flow_name,
-        'created_at': datetime.now().isoformat()
+        'created_at': datetime.now().isoformat(),
+        'context_settings': {
+            "use_context": True,
+            "context_range": (1, 10)
+        }
     }
     
     chat_flows.append(new_flow)
     user_db.update({'chat_flows': chat_flows}, User.username == username)
     return True
+
+# Функция для обновления настроек контекста чата
+def update_chat_context_settings(username, flow_id, settings):
+    user = user_db.get(User.username == username)
+    if not user:
+        return False
+    
+    chat_flows = user.get('chat_flows', [])
+    for flow in chat_flows:
+        if flow['id'] == flow_id:
+            flow['context_settings'] = settings
+            user_db.update({'chat_flows': chat_flows}, User.username == username)
+            return True
+    return False
 
 # Функция для получения списка чат-потоков пользователя
 def get_user_chat_flows(username):
@@ -151,12 +181,31 @@ def get_user_chat_flows(username):
 
 # Функция для очистки истории конкретного чата
 def clear_chat_history(username, flow_id):
+    """Очистка истории конкретного чата"""
     chat_db = ChatDatabase(f"{username}_{flow_id}")
     chat_db.clear_history()
-    if "message_hashes" in st.session_state:
-        del st.session_state.message_hashes
-    if "message_counter" in st.session_state:  # Добавляем сброс счетчика
-        del st.session_state.message_counter
+    
+    # Очищаем все связанные состояния
+    keys_to_delete = []
+    for key in st.session_state.keys():
+        # Удаляем все состояния, связанные с сообщениями
+        if any(key.startswith(prefix) for prefix in [
+            "message_hashes",
+            "message_counter",
+            "message_ids",
+            "translation_state_",
+            "translation_states",
+            "_last_input"
+        ]):
+            keys_to_delete.append(key)
+    
+    # Удаляем все найденные ключи
+    for key in keys_to_delete:
+        del st.session_state[key]
+    
+    # Принудительно сбрасываем счетчик сообщений
+    st.session_state.message_counter = 0
+    
     st.rerun()
 
 # Добавьте эту функцию после функции clear_chat_history
@@ -506,3 +555,63 @@ if send_button:  # Отправляем только при явном нажа�
     if user_input and user_input.strip():
         st.session_state['_last_input'] = user_input
         submit_message(user_input)
+
+# Изменяем часть кода с настройками контекста в боковой панели
+if 'current_chat_flow' in st.session_state:
+    current_flow = st.session_state.current_chat_flow
+    
+    # Получаем сохраненные настройки для текущего чата
+    current_settings = current_flow.get('context_settings', {
+        "use_context": True,
+        "context_range": (1, 10)
+    })
+    
+    # Настройки контекста
+    use_context = st.sidebar.checkbox(
+        "Использовать контекст истории",
+        value=current_settings["use_context"],
+        key=f"context_use_{current_flow['id']}"
+    )
+
+    if use_context:
+        current_chat_db = ChatDatabase(f"{st.session_state.username}_{current_flow['id']}")
+        history = current_chat_db.get_history()
+        max_messages = len(history) if history else 60
+        
+        context_range = st.sidebar.slider(
+            "Диапазон сообщений для анализа:",
+            min_value=1,
+            max_value=max(30, max_messages),
+            value=current_settings["context_range"],
+            step=1,
+            key=f"context_range_{current_flow['id']}",
+            help="Выберите диапазон сообщений для анализа контекста"
+        )
+        
+        # Сохраняем обновленные настройки
+        new_settings = {
+            "use_context": use_context,
+            "context_range": context_range
+        }
+        
+        if new_settings != current_settings:
+            update_chat_context_settings(
+                st.session_state.username,
+                current_flow['id'],
+                new_settings
+            )
+            # Обновляем настройки в текущем чате
+            st.session_state.current_chat_flow['context_settings'] = new_settings
+    else:
+        # Сохраняем настройки с выключенным контекстом
+        new_settings = {
+            "use_context": False,
+            "context_range": current_settings["context_range"]
+        }
+        if new_settings != current_settings:
+            update_chat_context_settings(
+                st.session_state.username,
+                current_flow['id'],
+                new_settings
+            )
+            st.session_state.current_chat_flow['context_settings'] = new_settings

@@ -24,8 +24,11 @@ def translate_text(text):
         print(f"Ошибка перевода: {str(e)}")
         return text
 
-def display_message_with_translation(message, message_hash, avatar, role):
-    """Отображает сообщение с возможностью перевода"""
+def display_message_with_translation(message, message_hash, avatar, role, button_key=None):
+    """Отображает сообщение с кнопкой перевода"""
+    if button_key is None:
+        button_key = f"translate_{message_hash}_{role}"
+    
     translation_key = f"translation_{message_hash}"
     content = message.get("content", "")
     
@@ -66,7 +69,7 @@ def display_message_with_translation(message, message_hash, avatar, role):
             except:
                 tooltip = "Перевести"
                 
-            if st.button("🔄", key=f"translate_{message_hash}", help=tooltip):
+            if st.button("🔄", key=button_key, help=tooltip):
                 current_state = st.session_state[translation_key]
                 current_state["is_translated"] = not current_state["is_translated"]
                 
