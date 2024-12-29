@@ -79,30 +79,23 @@ class ContextManager:
             
             for attempt in range(max_retries):
                 try:
+                    # Используем существующие настройки
+                    flowise_url = f"{st.secrets['flowise']['api_base_url']}{flow_id if flow_id else st.secrets['flowise']['main_chat_id']}"
+                    
                     response = requests.post(
-                        url="https://openrouter.ai/api/v1/chat/completions",
+                        url=flowise_url,
                         headers={
-                            "Authorization": f"Bearer {self.openrouter_api_key}",
                             "Content-Type": "application/json"
                         },
                         data=json.dumps({
-                            "model": "google/gemini-flash-1.5",
-                            "messages": [
-                                {
-                                    "role": "user",
-                                    "content": context_prompt
-                                }
-                            ],
-                            "max_tokens": 2048,
-                            "temperature": 0.2,
-                            "top_p": 0.9,
-                            "n": 1
+                            "question": context_prompt,
+                            "history": formatted_history
                         })
                     )
                     
                     if response.status_code == 200:
                         response_data = response.json()
-                        context_analysis = response_data['choices'][0]['message']['content'].strip()
+                        context_analysis = response_data.get('text', '') # или response_data напрямую
                         print(f"Получен анализ контекста для чата {chat_db_name}")
                     else:
                         print(f"Неожиданный формат ответа для чата {chat_db_name}")

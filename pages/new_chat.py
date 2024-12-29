@@ -190,7 +190,7 @@ NEW_CHAT_SETTINGS_KEY = "new_chat_context_settings"
 # Настройки контекста в боковой панели
 st.sidebar.title("Настройки контекста для истории")
 
-# Инициал��ация настроек в session_state если их нет
+# Инициализация настроек в session_state если их нет
 if NEW_CHAT_SETTINGS_KEY not in st.session_state:
     st.session_state[NEW_CHAT_SETTINGS_KEY] = {
         "use_context": True,
@@ -413,102 +413,52 @@ def submit_message(user_input):
     if not user_input:
         st.warning("Пожалуйста, введите сообщение")
         return
-        
-    if remaining_generations <= 0:
-        st.error("У вас нет активных генераций. Пожалуйста, активируйте новый токен.")
-        return
-        
+
     try:
-        progress_container = st.empty()
-        start_time = time.time()
-        
+        # Инициализация message_hashes
+        if "message_hashes" not in st.session_state:
+            st.session_state.message_hashes = set()
+
+        # Сохраняем сообщение пользователя
+        current_chat_db = ChatDatabase(f"{st.session_state.username}_{st.session_state.current_chat_flow['id']}")
+        current_chat_db.add_message("user", user_input)
+        display_message({"role": "user", "content": user_input}, "user")
+
         with st.spinner('Получаем ответ...'):
-            api_url = "https://openrouter.ai/api/v1/chat/completions"
-            
-            # Получаем историю чата
-            current_chat_id = st.session_state.current_chat_flow['id']
-            chat_db = ChatDatabase(f"{st.session_state.username}_{current_chat_id}")
-            history = chat_db.get_history()
-            
-            # Формируем сообщения для API с историей
-            messages = []
-            # Добавляем системное сообщение
-            messages.append({
-                "role": "system",
-                "content": "Ты - полезный ассистент. Используй контекст предыдущих сообщений для предоставления связных и контекстно-зависимых ответов."
-            })
-            
-            # Добавляем историю сообщений
-            for msg in history[-10:]:  # Берем последние 10 сообщений
-                messages.append({
-                    "role": msg["role"],
-                    "content": msg["content"]
-                })
-            
-            # Добавляем текущий вопрос пользователя
-            messages.append({
-                "role": "user",
-                "content": user_input
-            })
+            # 1. Сначала получаем контекст через OpenRouter
+            context_manager = ContextManager()
+            enhanced_message = context_manager.get_context(
+                st.session_state.username, 
+                user_input,
+                st.session_state.current_chat_flow['id']
+            )
+
+            # 2. Затем отправляем запрос в Flowise
+            flowise_url = f"{st.secrets['flowise']['api_base_url']}{st.session_state.current_chat_flow['id']}"
             
             payload = {
-                "model": "google/gemini-flash-1.5",
-                "messages": messages,
-                "max_tokens": 2048,
-                "temperature": 0.7,
-                "top_p": 0.9
-            }
-            
-            headers = {
-                "Authorization": f"Bearer {st.secrets['openrouter']['api_key']}",
-                'Content-Type': 'application/json',
-                "HTTP-Referer": "https://github.com/cursor-ai",
-                "X-Title": "Personal Assistant"
+                "question": enhanced_message  # Используем сообщение с контекстом
             }
 
-            try:
-                # Сохраняем сообщение пользователя
-                user_hash = get_message_hash("user", user_input)
-                if "message_hashes" not in st.session_state:
-                    st.session_state.message_hashes = set()
-                
-                if user_hash not in st.session_state.message_hashes:
-                    st.session_state.message_hashes.add(user_hash)
-                    current_chat_db.add_message("user", user_input)
+            response = requests.post(flowise_url, json=payload)
+            response_data = response.json()
 
-                # Отправляем запрос
-                response = requests.post(api_url, json=payload, headers=headers, timeout=100)
-                elapsed_time = int(time.time() - start_time)
+            if response_data and isinstance(response_data, dict) and 'text' in response_data:
+                assistant_response = response_data['text'].strip()  # Берем только текст и убираем лишние пробелы
                 
-                if response.status_code == 200:
-                    progress_container.info(f"⏱️ Время обработки: {elapsed_time} сек.")
-                    
-                    try:
-                        response_data = response.json()
-                        assistant_response = response_data['choices'][0]['message']['content']
-                        
-                        if assistant_response:
-                            translated_response = translate_text(assistant_response)
-                            assistant_hash = get_message_hash("assistant", translated_response)
-                            
-                            if assistant_hash not in st.session_state.message_hashes:
-                                st.session_state.message_hashes.add(assistant_hash)
-                                current_chat_db.add_message("assistant", translated_response)
-                                update_remaining_generations(st.session_state.username, -1)
-                                st.rerun()
-                        else:
-                            st.error("Получен пустой ответ от API")
-                    except Exception as e:
-                        st.error(f"Ошибка при обработке ответа: {str(e)}")
-                else:
-                    st.error(f"Неожиданный ответ API (код {response.status_code})")
-                
-            except requests.exceptions.RequestException as e:
-                progress_container.empty()
-                st.error(f"Ошибка сети при отправке запроса: {str(e)}")
-                
+                # Проверяем, что ответ не пустой
+                if assistant_response:
+                    # Сохраняем ТОЛЬКО текст ответа
+                    current_chat_db.add_message("assistant", assistant_response)
+                    display_message({
+                        "role": "assistant", 
+                        "content": assistant_response
+                    }, "assistant")
+                    update_remaining_generations(st.session_state.username, -1)
+                    st.rerun()
+
     except Exception as e:
-        st.error(f"Общая ошибка: {str(e)}")
+        st.error(f"Ошибка: {str(e)}")
 
 # Создаем контейнер для поля ввода
 input_container = st.container()

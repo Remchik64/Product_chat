@@ -107,7 +107,7 @@ def get_user_profile_image(username):
     return "👤"  # Возвращаем эмодзи, если изображение не найдено
 
 def get_message_hash(role, content):
-    """Создает уни��альный хэш для сообщения"""
+    """Создает уникальный хэш для сообщения"""
     return hashlib.md5(f"{role}:{content}".encode()).hexdigest()
 
 def display_remaining_generations():
@@ -155,123 +155,48 @@ def submit_question():
         return
 
     try:
-        # Сначала сохраняем сообщение пользователя
-        user_hash = get_message_hash("user", user_input)
-        if user_hash not in st.session_state.message_hashes:
-            st.session_state.message_hashes.add(user_hash)
-            chat_db.add_message("user", user_input)
-            
-        # Отображаем сообщение пользователя
+        # Инициализация message_hashes
+        if "message_hashes" not in st.session_state:
+            st.session_state.message_hashes = set()
+
+        # Сохраняем сообщение пользователя
+        chat_db.add_message("user", user_input)
         display_message({"role": "user", "content": user_input}, "user")
 
-        progress_container = st.empty()
-        start_time = time.time()
-        
         with st.spinner('Обрабатываем ваш запрос...'):
-            api_url = "https://openrouter.ai/api/v1/chat/completions"
-            
-            # Получаем настройки контекста
-            use_context = st.session_state[MAIN_CHAT_SETTINGS_KEY]["use_context"]
-            context_messages = st.session_state[MAIN_CHAT_SETTINGS_KEY]["context_messages"]
-            
-            # Получаем историю с учетом настроек ко��текста
-            history = chat_db.get_history()
-            if use_context and history:
-                history = history[-context_messages:]
-            
-            # Формируем системное сообщение с учетом контекста
-            system_message = {
-                "role": "system",
-                "content": "Ты - профессиональный ассистент. Анализируй контекст диалога и давай релевантные ответы."
-            }
-            
-            # Формируем сообщения для API
-            messages = [system_message]
-            if use_context:
-                for msg in history:
-                    messages.append({
-                        "role": msg["role"],
-                        "content": msg["content"]
-                    })
-            
-            # Добавляем текущий вопрос
-            messages.append({
-                "role": "user",
-                "content": user_input
-            })
+            # 1. Сначала получаем контекст через OpenRouter
+            context_manager = ContextManager()
+            enhanced_message = context_manager.get_context(
+                st.session_state.username, 
+                user_input
+            )
+
+            # 2. Затем отправляем запрос в Flowise
+            flowise_url = f"{st.secrets['flowise']['api_base_url']}{st.secrets['flowise']['main_chat_id']}"
             
             payload = {
-                "model": st.session_state.get("selected_model", "google/gemini-flash-1.5"),
-                "messages": messages
+                "question": enhanced_message  # Используем сообщение с контекстом
             }
-            
-            headers = {
-                "Authorization": f"Bearer {st.secrets['openrouter']['api_key']}",
-                "HTTP-Referer": "https://your-site-url.com",  # Замените на URL вашего сайта
-                "X-Title": "Your App Name",  # Замените на название вашего приложения
-                "Content-Type": "application/json"
-            }
-            
-            response = requests.post(api_url, headers=headers, data=json.dumps(payload), timeout=100)
-            elapsed_time = int(time.time() - start_time)
-            
-            progress_container.info(f"⏱️ Время обработки: {elapsed_time} сек.")
-            
-            # Подробная обработка ошибок
-            if response.status_code == 500:
-                error_data = response.json()
-                error_message = error_data.get('message', 'Unknown error')
-                st.error(f"Ошибка сервера: {error_message}")
-                print(f"Server error details: {error_data}")
-                return
+
+            response = requests.post(flowise_url, json=payload)
+            response_data = response.json()
+
+            if response_data and isinstance(response_data, dict) and 'text' in response_data:
+                assistant_response = response_data['text'].strip()  # Берем только текст и убираем лишние пробелы
                 
-            if response.status_code != 200:
-                st.error(f"Ошибка API (код {response.status_code}): {response.text}")
-                return
-                
-            try:
-                output = response.json()
-                response_text = output['choices'][0]['message']['content']
-                
-                if not response_text:
-                    st.warning("Получен пустой ответ")
-                    return
-                
-                # Добавляем перевод ответа, если он на английском
-                try:
-                    # Проверяем, содержит ли текст английские символы
-                    if any(ord(char) < 128 for char in response_text):
-                        response_text = translate_text(response_text)
-                except Exception as e:
-                    st.error(f"Ошибка при переводе: {str(e)}")
-                
-                # Отображаем ответ ассистента
-                if response_text:
-                    assistant_message = {"role": "assistant", "content": response_text}
-                    display_message(assistant_message, "assistant")
-                    
-                    # Сохраняем сообщение в базу
-                    assistant_hash = get_message_hash("assistant", response_text)
-                    if assistant_hash not in st.session_state.message_hashes:
-                        st.session_state.message_hashes.add(assistant_hash)
-                        chat_db.add_message("assistant", response_text)
-                    
-                    # Обновляем количество генераций
+                # Проверяем, что ответ не пустой
+                if assistant_response:
+                    # Сохраняем ТОЛЬКО текст ответа
+                    chat_db.add_message("assistant", assistant_response)
+                    display_message({
+                        "role": "assistant", 
+                        "content": assistant_response
+                    }, "assistant")
                     update_remaining_generations(st.session_state.username, -1)
                     st.rerun()
-                    
-            except json.JSONDecodeError:
-                st.error("Ошибка при обработке ответа")
-                return
-                
-    except requests.exceptions.RequestException as e:
-        progress_container.empty()
-        st.error(f"Ошибка сети: {str(e)}")
-        print(f"Network error details: {str(e)}")
-        
+
     except Exception as e:
-        st.error(f"Проиошла ошибка: {str(e)}")
-        print(f"Unexpected error details: {str(e)}")
+        st.error(f"Ошибка: {str(e)}")
 
 def clear_input():
     """Очистка поля ввода"""
@@ -350,7 +275,7 @@ def main():
 
     # Заменяем простую кнопку очистки на кнопку с подтверждением
     if st.sidebar.button(
-        "Очистить чат" if not st.session_state.main_clear_chat_confirm else "⚠ Нажмите еще раз для по��тверждения",
+        "Очистить чат" if not st.session_state.main_clear_chat_confirm else "⚠ Нажмите еще раз для подтверждения",
         type="secondary" if not st.session_state.main_clear_chat_confirm else "primary",
         key="main_clear_chat_button"
     ):
@@ -406,7 +331,7 @@ def main():
         "context_messages": context_messages if use_context else 10
     })
 
-    # Поле ввода с возможностью ра��тягивания
+    # Поле ввода с возможностью растягивания
     user_input = st.text_area(
         "Введите ваше сообщение",
         height=100,
