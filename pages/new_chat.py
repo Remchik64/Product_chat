@@ -253,53 +253,69 @@ NEW_CHAT_SETTINGS_KEY = "new_chat_context_settings"
 # Настройки контекста в боковой панели
 st.sidebar.title("Настройки контекста для истории")
 
-# Инициализация настроек в session_state если их нет
-if NEW_CHAT_SETTINGS_KEY not in st.session_state:
-    st.session_state[NEW_CHAT_SETTINGS_KEY] = {
-        "use_context": True,
-        "context_range": (1, 10)  # Устанавливаем начальное значение диапазона
-    }
+if 'current_chat_flow' in st.session_state:
+    current_flow = st.session_state.current_chat_flow
+    
+    # Получаем сохраненные настройки для текущего чата
+    if 'context_settings' not in current_flow:
+        current_flow['context_settings'] = {
+            "use_context": True,
+            "context_range": (1, 10)
+        }
+    
+    current_settings = current_flow['context_settings']
+    
+    # Настройки контекста
+    use_context = st.sidebar.checkbox(
+        "Использовать контекст истории",
+        value=current_settings["use_context"],
+        key=f"context_use_{current_flow['id']}"
+    )
 
-# Настройки контекста
-use_context = st.sidebar.checkbox(
-    "Использовать контекст истории",
-    value=st.session_state[NEW_CHAT_SETTINGS_KEY]["use_context"],
-    key=f"{NEW_CHAT_SETTINGS_KEY}_use_context"
-)
-
-if use_context:
-    # Получаем количество сообщений в текущем чате
-    if 'current_chat_flow' in st.session_state:  # Проверяем наличие текущего чата
-        current_chat_db = ChatDatabase(f"{st.session_state.username}_{st.session_state.current_chat_flow['id']}")
+    if use_context:
+        current_chat_db = ChatDatabase(f"{st.session_state.username}_{current_flow['id']}")
         history = current_chat_db.get_history()
         max_messages = len(history) if history else 60
-        
-        # Получаем текущий диапазон из session_state или используем значение по умолчанию
-        current_range = st.session_state[NEW_CHAT_SETTINGS_KEY].get("context_range", (1, 10))
         
         context_range = st.sidebar.slider(
             "Диапазон сообщений для анализа:",
             min_value=1,
             max_value=max(30, max_messages),
-            value=current_range,  # Используем текущее значение
+            value=current_settings["context_range"],
             step=1,
-            key=f"{NEW_CHAT_SETTINGS_KEY}_range",
+            key=f"context_range_{current_flow['id']}",
             help="Выберите диапазон сообщений для анализа контекста"
         )
-
-        # Обновляем настройки в session_state
-        st.session_state[NEW_CHAT_SETTINGS_KEY].update({
+        
+        # Сохраняем обновленные настройки
+        new_settings = {
             "use_context": use_context,
             "context_range": context_range
-        })
+        }
+        
+        if new_settings != current_settings:
+            update_chat_context_settings(
+                st.session_state.username,
+                current_flow['id'],
+                new_settings
+            )
+            # Обновляем настройки в текущем чате
+            st.session_state.current_chat_flow['context_settings'] = new_settings
     else:
-        st.sidebar.warning("Создайте новый чат для настройки контекста")
+        # Сохраняем настройки с выключенным контекстом
+        new_settings = {
+            "use_context": False,
+            "context_range": current_settings["context_range"]
+        }
+        if new_settings != current_settings:
+            update_chat_context_settings(
+                st.session_state.username,
+                current_flow['id'],
+                new_settings
+            )
+            st.session_state.current_chat_flow['context_settings'] = new_settings
 else:
-    # Если контекст выключен, сохраняем значение по умолчанию
-    st.session_state[NEW_CHAT_SETTINGS_KEY].update({
-        "use_context": False,
-        "context_range": (1, 10)
-    })
+    st.sidebar.info("Создайте новый чат для настройки контекста")
 
 # Добавляем разделитель
 st.sidebar.markdown("---")
@@ -555,63 +571,3 @@ if send_button:  # Отправляем только при явном нажа�
     if user_input and user_input.strip():
         st.session_state['_last_input'] = user_input
         submit_message(user_input)
-
-# Изменяем часть кода с настройками контекста в боковой панели
-if 'current_chat_flow' in st.session_state:
-    current_flow = st.session_state.current_chat_flow
-    
-    # Получаем сохраненные настройки для текущего чата
-    current_settings = current_flow.get('context_settings', {
-        "use_context": True,
-        "context_range": (1, 10)
-    })
-    
-    # Настройки контекста
-    use_context = st.sidebar.checkbox(
-        "Использовать контекст истории",
-        value=current_settings["use_context"],
-        key=f"context_use_{current_flow['id']}"
-    )
-
-    if use_context:
-        current_chat_db = ChatDatabase(f"{st.session_state.username}_{current_flow['id']}")
-        history = current_chat_db.get_history()
-        max_messages = len(history) if history else 60
-        
-        context_range = st.sidebar.slider(
-            "Диапазон сообщений для анализа:",
-            min_value=1,
-            max_value=max(30, max_messages),
-            value=current_settings["context_range"],
-            step=1,
-            key=f"context_range_{current_flow['id']}",
-            help="Выберите диапазон сообщений для анализа контекста"
-        )
-        
-        # Сохраняем обновленные настройки
-        new_settings = {
-            "use_context": use_context,
-            "context_range": context_range
-        }
-        
-        if new_settings != current_settings:
-            update_chat_context_settings(
-                st.session_state.username,
-                current_flow['id'],
-                new_settings
-            )
-            # Обновляем настройки в текущем чате
-            st.session_state.current_chat_flow['context_settings'] = new_settings
-    else:
-        # Сохраняем настройки с выключенным контекстом
-        new_settings = {
-            "use_context": False,
-            "context_range": current_settings["context_range"]
-        }
-        if new_settings != current_settings:
-            update_chat_context_settings(
-                st.session_state.username,
-                current_flow['id'],
-                new_settings
-            )
-            st.session_state.current_chat_flow['context_settings'] = new_settings
