@@ -5,6 +5,7 @@ import hashlib
 import os
 from PIL import Image
 from googletrans import Translator
+import time
 
 # Настройка заголовка страницы
 st.set_page_config(
@@ -31,7 +32,7 @@ else:
     assistant_avatar = "🤖"
 
 def get_user_profile_image(username):
-    """Получение изображения профиля польз��вателя"""
+    """Получение изображения профиля пользователя"""
     for ext in ['png', 'jpg', 'jpeg']:
         image_path = os.path.join(PROFILE_IMAGES_DIR, f"{username}.{ext}")
         if os.path.exists(image_path):
@@ -90,7 +91,7 @@ def get_api_url():
         return full_url
     except Exception as e:
         st.error(f"Ошибка при получении URL API: {str(e)}")
-        # Выводим дополнительную отладочну�� информацию
+        # Выводим дополнительную отладочную информацию
         print(f"Доступные секции в secrets: {dir(st.secrets)}")
         if hasattr(st.secrets, 'flowise'):
             print(f"Доступные параметры в flowise: {dir(st.secrets.flowise)}")
@@ -111,11 +112,14 @@ def query(question):
                 "temperature": 0.7,
                 "modelName": "mistral",
                 "maxTokens": 2000,
-                "systemMessage": "Вы - полезный ассистент. Отвечайте на русском языке.",
-                "returnSourceDocuments": False
-            },
-            "history": st.session_state.get(get_user_messages_key(), [])
+                "systemMessage": "Вы - полезный ассистент. Отвечайте на русском языке."
+            }
         }
+        
+        # Добавляем историю сообщений, если она есть
+        messages_key = get_user_messages_key()
+        if messages_key in st.session_state:
+            payload["history"] = st.session_state[messages_key]
         
         # Обновленные заголовки
         headers = {
@@ -123,28 +127,50 @@ def query(question):
             "Accept": "application/json"
         }
 
-        # Добавляем API ключ Together AI
-        if "together" in st.secrets and "api_key" in st.secrets["together"]:
-            headers["Authorization"] = f"Bearer {st.secrets.together.api_key}"
-            headers["Origin"] = st.secrets.flowise.base_url
-        
-        # Отправляем запрос с увеличенным timeout
-        response = requests.post(
-            api_url, 
-            json=payload, 
-            headers=headers, 
-            timeout=60
-        )
-        
-        if response.status_code == 200:
-            return response.json()
-        else:
-            st.error(f"Ошибка API (код {response.status_code}): {response.text}")
-            return None
+        # Пробуем отправить запрос с повторными попытками
+        for attempt in range(3):  # 3 попытки
+            try:
+                response = requests.post(
+                    api_url, 
+                    json=payload, 
+                    headers=headers, 
+                    timeout=60
+                )
+                
+                # Проверяем статус ответа
+                if response.status_code == 200:
+                    return response.json()
+                elif response.status_code == 500:
+                    # Если это последняя попытка
+                    if attempt == 2:
+                        st.error(f"Сервис временно недоступен. Пожалуйста, попробуйте позже.")
+                        return None
+                    # Если есть еще попытки, ждем и пробуем снова
+                    time.sleep(2)
+                    continue
+                else:
+                    st.error(f"Неожиданный ответ сервера (код {response.status_code})")
+                    return None
+                    
+            except requests.exceptions.Timeout:
+                if attempt == 2:
+                    st.error("Превышено время ожидания ответа")
+                    return None
+                time.sleep(2)
+                continue
+                
+            except requests.exceptions.RequestException as e:
+                if attempt == 2:
+                    st.error(f"Ошибка сети: {str(e)}")
+                    return None
+                time.sleep(2)
+                continue
             
     except Exception as e:
-        st.error(f"Ошибка при отправке запроса: {str(e)}")
+        st.error(f"Общая ошибка: {str(e)}")
         return None
+
+    return None
 
 def count_api_responses():
     """Подсчет количества ответов от API в истории"""
@@ -154,6 +180,22 @@ def count_api_responses():
 def sidebar_content():
     """Содержимое боковой панели"""
     with st.sidebar:
+        # Добавляем постоянный стиль для кнопки
+        st.markdown("""
+            <style>
+            div[data-testid="stButton"] > button[kind="secondary"] {
+                background: none;
+                color: inherit;
+                border: 1px solid;
+                padding: 6px 12px;
+                font-size: 14px;
+                border-radius: 4px;
+                margin: 0;
+                width: 100%;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+        
         st.header("Управление чатом")
         
         # Отображение информации о пользователе
@@ -173,8 +215,11 @@ def sidebar_content():
         progress = responses_count / MAX_API_RESPONSES
         st.progress(progress)
         
-        # Кнопка очистки истории
-        if st.button("Очистить историю чата", use_container_width=True):
+        # Кнопка очистки истории с постоянным стилем
+        if st.button("Очистить историю чата", 
+                     use_container_width=True, 
+                     type="secondary",
+                     key="clear_history_button"):
             messages_key = get_user_messages_key()
             st.session_state[messages_key] = []
             st.rerun()
@@ -212,7 +257,14 @@ def display_message_with_translation(message):
     message_hash = get_message_hash(message["role"], message["content"])
     avatar = assistant_avatar if message["role"] == "assistant" else get_user_profile_image(st.session_state.get("username", ""))
     
-    # Ини��иализируем состояние перевода для этого сообщения
+    # Добавляем уникальный идентификатор сообщения
+    if 'message_ids' not in st.session_state:
+        st.session_state.message_ids = {}
+    
+    if message_hash not in st.session_state.message_ids:
+        st.session_state.message_ids[message_hash] = len(st.session_state.message_ids)
+    
+    # Инициализируем состояние перевода для этого сообщения
     translation_key = f"translation_state_{message_hash}"
     if translation_key not in st.session_state:
         st.session_state[translation_key] = {
@@ -222,21 +274,17 @@ def display_message_with_translation(message):
         }
     
     with st.chat_message(message["role"], avatar=avatar):
-        # Изменяем соотношение колонок для лучшей видимости кнопки
-        cols = st.columns([0.9, 0.1])  # Меняем с [0.95, 0.05] на [0.9, 0.1]
+        cols = st.columns([0.9, 0.1])
         
-        # Создаем placeholder для сообщения в первой колонке
         with cols[0]:
             message_placeholder = st.empty()
             current_state = st.session_state[translation_key]
             
-            # Показываем текущий текст в зависимости от состояния перевода
             if current_state["is_translated"] and current_state["translated_text"]:
                 message_placeholder.markdown(current_state["translated_text"])
             else:
                 message_placeholder.markdown(current_state["original_text"])
             
-        # Кнопка перевода во второй колонке с улучшенным стилем
         with cols[1]:
             st.markdown(
                 """
@@ -251,15 +299,15 @@ def display_message_with_translation(message):
                 """,
                 unsafe_allow_html=True
             )
-            if st.button("🔄", key=f"translate_{message_hash}", help="Перевести сообщение"):
+            # Используем комбинацию хэша, ID сообщения и роли для уникального ключа
+            button_key = f"translate_{message_hash}_{st.session_state.message_ids[message_hash]}_{message['role']}"
+            if st.button("🔄", key=button_key, help="Перевести сообщение"):
                 current_state = st.session_state[translation_key]
                 
                 if current_state["is_translated"]:
-                    # Возвращаемся к оригинальному тексту
                     message_placeholder.markdown(current_state["original_text"])
                     st.session_state[translation_key]["is_translated"] = False
                 else:
-                    # Переводим текст
                     if not current_state["translated_text"]:
                         translated_text = translate_text(current_state["original_text"])
                         st.session_state[translation_key]["translated_text"] = translated_text

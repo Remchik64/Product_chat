@@ -207,8 +207,20 @@ def display_message(message, role):
     message_hash = get_message_hash(role, message["content"])
     avatar = assistant_avatar if role == "assistant" else get_user_profile_image(st.session_state.username)
     
-    # Используем функцию из utils.translation
-    if display_message_with_translation(message, message_hash, avatar, role):
+    # Добавляем номер сообщения
+    if 'message_counter' not in st.session_state:
+        st.session_state.message_counter = 1
+    else:
+        st.session_state.message_counter += 1
+    
+    # Добавляем номер сообщения в конец контента
+    message_with_number = {
+        "role": message["role"],
+        "content": f"{message['content']}\n\n*Сообщение #{st.session_state.message_counter}*"
+    }
+    
+    # Используем функцию из utils.translation с пронумерованным сообщением
+    if display_message_with_translation(message_with_number, message_hash, avatar, role):
         chat_db.delete_message(message_hash)
         if "message_hashes" in st.session_state:
             if message_hash in st.session_state.message_hashes:
@@ -244,6 +256,8 @@ def clear_chat_history():
     chat_db.clear_history()  # Очистка базы данных истории чата
     if "message_hashes" in st.session_state:
         del st.session_state["message_hashes"]  # Сброс хэшей сообщений
+    if "message_counter" in st.session_state:  # Добавляем сброс счетчика
+        del st.session_state.message_counter
 
 def main():
     # Инициализируем базу данных чата
@@ -252,7 +266,7 @@ def main():
     # Получаем историю чата
     chat_history = chat_db.get_history()
     
-    # Инициализируем message_hashes, если его нет
+    # Инициализируем message_hashes и message_counter
     if "message_hashes" not in st.session_state:
         st.session_state.message_hashes = set()
         # Добавляем все существующие хэши
@@ -260,7 +274,10 @@ def main():
             message_hash = get_message_hash(message["role"], message["content"])
             st.session_state.message_hashes.add(message_hash)
     
-    # Ображаем историю чата
+    # Сбрасываем счетчик сообщений перед отображением истории
+    st.session_state.message_counter = 0
+    
+    # Отображаем историю чата
     for message in chat_history:
         display_message(message, message["role"])
     

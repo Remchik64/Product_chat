@@ -69,8 +69,20 @@ def display_message(message, role):
     message_hash = get_message_hash(role, message["content"])
     avatar = assistant_avatar if role == "assistant" else get_user_profile_image(st.session_state.username)
     
-    # Используем функцию из utils.translation
-    if display_message_with_translation(message, message_hash, avatar, role):
+    # Добавляем номер сообщения
+    if 'message_counter' not in st.session_state:
+        st.session_state.message_counter = 1
+    else:
+        st.session_state.message_counter += 1
+    
+    # Добавляем номер сообщения в конец контента
+    message_with_number = {
+        "role": message["role"],
+        "content": f"{message['content']}\n\n*Сообщение #{st.session_state.message_counter}*"
+    }
+    
+    # Используем функцию из utils.translation с пронумерованным сообщением
+    if display_message_with_translation(message_with_number, message_hash, avatar, role):
         current_chat_db = ChatDatabase(f"{st.session_state.username}_{st.session_state.current_chat_flow['id']}")
         current_chat_db.delete_message(message_hash)
         if "message_hashes" in st.session_state:
@@ -143,6 +155,8 @@ def clear_chat_history(username, flow_id):
     chat_db.clear_history()
     if "message_hashes" in st.session_state:
         del st.session_state.message_hashes
+    if "message_counter" in st.session_state:  # Добавляем сброс счетчика
+        del st.session_state.message_counter
     st.rerun()
 
 # Добавьте эту функцию после функции clear_chat_history
