@@ -70,17 +70,58 @@ def display_message(message, role):
     message_hash = get_message_hash(role, message["content"])
     avatar = assistant_avatar if role == "assistant" else get_user_profile_image(st.session_state.username)
     
-    # Используем функцию из utils.translation
-    if display_message_with_translation(message, message_hash, avatar, role):
-        current_chat_db = ChatDatabase(f"{st.session_state.username}_{st.session_state.current_chat_flow['id']}")
-        current_chat_db.delete_message(message_hash)
-        if "message_hashes" in st.session_state:
-            if message_hash in st.session_state.message_hashes:
-                st.session_state.message_hashes.remove(message_hash)
-            translation_key = f"translation_{message_hash}"
-            if translation_key in st.session_state:
-                del st.session_state[translation_key]
-        st.rerun()
+    # Получаем номер сообщения
+    current_chat_db = ChatDatabase(f"{st.session_state.username}_{st.session_state.current_chat_flow['id']}")
+    history = current_chat_db.get_history()
+    message_number = history.index(message) + 1
+    
+    with st.chat_message(role, avatar=avatar):
+        cols = st.columns([0.85, 0.1, 0.05])  # Изменили пропорции для кнопки удаления
+        
+        with cols[0]:
+            message_placeholder = st.empty()
+            translation_key = f"translation_state_{message_hash}"
+            
+            if translation_key not in st.session_state:
+                st.session_state[translation_key] = {
+                    "is_translated": False,
+                    "original_text": message["content"],
+                    "translated_text": None
+                }
+            
+            current_state = st.session_state[translation_key]
+            if current_state["is_translated"] and current_state["translated_text"]:
+                message_placeholder.markdown(current_state["translated_text"])
+            else:
+                message_placeholder.markdown(current_state["original_text"])
+        
+        with cols[1]:
+            if st.button("🔄", key=f"translate_{message_hash}", help="Перевести сообщение"):
+                current_state = st.session_state[translation_key]
+                if current_state["is_translated"]:
+                    message_placeholder.markdown(current_state["original_text"])
+                    st.session_state[translation_key]["is_translated"] = False
+                else:
+                    if not current_state["translated_text"]:
+                        translated_text = translate_text(current_state["original_text"])
+                        st.session_state[translation_key]["translated_text"] = translated_text
+                    message_placeholder.markdown(st.session_state[translation_key]["translated_text"])
+                    st.session_state[translation_key]["is_translated"] = True
+                    
+        # Добавляем кнопку удаления
+        with cols[2]:
+            if st.button("🗑️", key=f"delete_{message_hash}", help="Удалить сообщение"):
+                current_chat_db.delete_message(message_hash)
+                if "message_hashes" in st.session_state:
+                    if message_hash in st.session_state.message_hashes:
+                        st.session_state.message_hashes.remove(message_hash)
+                    translation_key = f"translation_{message_hash}"
+                    if translation_key in st.session_state:
+                        del st.session_state[translation_key]
+                st.rerun()
+        
+        # Добавляем номер сообщения
+        st.markdown(f"<div style='text-align: right; color: gray; font-size: 0.8em; margin-top: 5px;'>Сообщение #{message_number}</div>", unsafe_allow_html=True)
 
 # Функция для сохранения нового чат-потока
 def save_chat_flow(username, flow_id, flow_name=None):
