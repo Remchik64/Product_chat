@@ -4,24 +4,54 @@ import streamlit as st
 # Создаем глобальный экземпляр переводчика
 translator = Translator()
 
-def translate_text(text):
-    """Переводит текст между русским и английским языками"""
-    if not text or not isinstance(text, str):
-        return text
-
+def translate_text(text, target_lang='ru'):
+    """
+    Переводит текст на указанный язык, разбивая длинный текст на части
+    target_lang: 'ru' для русского или 'en' для английского
+    """
     try:
+        translator = Translator()
+        
+        if text is None or not isinstance(text, str) or text.strip() == '':
+            return "Пустой текст для перевода"
+            
         # Определяем язык текста
-        detected = translator.detect(text)
+        detected_lang = translator.detect(text).lang
         
-        # Если текст на русском - переводим на английский, иначе на русский
-        target_lang = 'en' if detected.lang == 'ru' else 'ru'
+        # Если текст уже на целевом языке, меняем язык перевода
+        if detected_lang == target_lang:
+            target_lang = 'en' if target_lang == 'ru' else 'ru'
         
-        translation = translator.translate(text, dest=target_lang)
-        if translation and hasattr(translation, 'text'):
-            return translation.text
-        return text
+        # Разбиваем текст на части по 1000 символов
+        # Делим по предложениям, чтобы не разрывать их
+        parts = []
+        current_part = ""
+        sentences = text.replace('\n', '. ').split('. ')
+        
+        for sentence in sentences:
+            if len(current_part) + len(sentence) < 1000:
+                current_part += sentence + '. '
+            else:
+                if current_part:
+                    parts.append(current_part.strip())
+                current_part = sentence + '. '
+        if current_part:
+            parts.append(current_part.strip())
+        
+        # Переводим каждую часть отдельно
+        translated_parts = []
+        for part in parts:
+            translation = translator.translate(part, dest=target_lang)
+            if translation and hasattr(translation, 'text'):
+                translated_parts.append(translation.text)
+            else:
+                translated_parts.append(part)
+        
+        # Объединяем переведенные части
+        return ' '.join(translated_parts)
+            
     except Exception as e:
-        print(f"Ошибка перевода: {str(e)}")
+        st.error(f"Ошибка при переводе: {str(e)}")
         return text
 
 def display_message_with_translation(message, message_hash, avatar, role, button_key=None):
