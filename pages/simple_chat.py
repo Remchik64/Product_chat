@@ -31,6 +31,10 @@ if os.path.exists(ASSISTANT_ICON_PATH):
 else:
     assistant_avatar = "🤖"
 
+def clear_input():
+    """Очистка поля ввода"""
+    st.session_state.message_input = ""
+
 def get_user_profile_image(username):
     """Получение изображения профиля пользователя"""
     for ext in ['png', 'jpg', 'jpeg']:
@@ -107,13 +111,7 @@ def query(question):
 
         # Обновленный payload с корректными параметрами
         payload = {
-            "question": question,
-            "overrideConfig": {
-                "temperature": 0.7,
-                "modelName": "mistral",
-                "maxTokens": 2000,
-                "systemMessage": "Вы - полезный ассистент. Отвечайте на русском языке."
-            }
+            "question": question
         }
         
         # Добавляем историю сообщений, если она есть
@@ -123,8 +121,7 @@ def query(question):
         
         # Обновленные заголовки
         headers = {
-            "Content-Type": "application/json",
-            "Accept": "application/json"
+            "Content-Type": "application/json"
         }
 
         # Пробуем отправить запрос с повторными попытками
@@ -139,13 +136,42 @@ def query(question):
                 
                 # Проверяем статус ответа
                 if response.status_code == 200:
-                    return response.json()
+                    response_data = response.json()
+                    
+                    if response_data and isinstance(response_data, dict) and 'text' in response_data:
+                        assistant_response = response_data['text'].strip()
+                        
+                        # Добавляем проверку языка и перевод
+                        try:
+                            translator = Translator()
+                            detected_lang = translator.detect(assistant_response).lang
+                            
+                            # Если ответ не на русском, переводим его
+                            if detected_lang != 'ru':
+                                translated_response = translator.translate(assistant_response, dest='ru')
+                                assistant_response = translated_response.text
+                        except Exception as e:
+                            st.error(f"Ошибка при переводе: {str(e)}")
+                        
+                        # Добавляем сообщения в историю
+                        if messages_key not in st.session_state:
+                            st.session_state[messages_key] = []
+                        
+                        # Добавляем сообщение пользователя
+                        user_message = {"role": "user", "content": question}
+                        st.session_state[messages_key].append(user_message)
+                        
+                        # Добавляем ответ ассистента
+                        assistant_message = {"role": "assistant", "content": assistant_response}
+                        st.session_state[messages_key].append(assistant_message)
+                        
+                        st.rerun()
+                        return response_data
+                        
                 elif response.status_code == 500:
-                    # Если это последняя попытка
                     if attempt == 2:
                         st.error(f"Сервис временно недоступен. Пожалуйста, попробуйте позже.")
                         return None
-                    # Если есть еще попытки, ждем и пробуем снова
                     time.sleep(2)
                     continue
                 else:
@@ -353,24 +379,29 @@ def main():
         st.warning("⚠️ Достигнут лимит ответов. Пожалуйста, очистите историю чата для продолжения общения.")
         return
 
-    # Поле ввода сообщения
-    if prompt := st.chat_input("Введите ваше сообщение..."):
-        # Добавление сообщения пользователя
-        st.session_state[messages_key].append({"role": "user", "content": prompt})
-        display_message_with_translation({"role": "user", "content": prompt})
+    # Поле ввода с возможностью растягивания
+    user_input = st.text_area(
+        "Введите ваше сообщение",
+        height=100,
+        key="message_input",
+        placeholder="Введите текст сообщения здесь..."
+    )
 
-        # Получение ответа от API
-        with st.spinner("Обработка запроса..."):
-            response = query(prompt)
-            
-            if response:
-                full_response = response.get("text", "Извините, произошла ошибка при получении ответа")
-                # Добавление ответа ассистента в историю
-                assistant_message = {"role": "assistant", "content": full_response}
-                st.session_state[messages_key].append(assistant_message)
-                display_message_with_translation(assistant_message)
-            else:
-                st.error("Произошла ошибка при получении ответа")
+    # Создаем три колонки для кнопок
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        send_button = st.button("Отправить", key="send_message", use_container_width=True)
+    with col2:
+        clear_button = st.button("Очистить", key="clear_input", on_click=clear_input, use_container_width=True)
+    with col3:
+        cancel_button = st.button("Отменить", key="cancel_request", on_click=clear_input, use_container_width=True)
+
+    # Обработка отправки сообщения
+    if send_button and user_input and user_input.strip():
+        st.session_state['_last_input'] = user_input
+        with st.spinner('Отправляем ваш запрос...'):
+            query(user_input)
 
 if __name__ == "__main__":
     main() 
