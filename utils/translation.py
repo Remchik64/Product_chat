@@ -56,8 +56,14 @@ def translate_text(text, target_lang='ru'):
 
 def display_message_with_translation(message, message_hash, avatar, role, button_key=None):
     """Отображает сообщение с кнопкой перевода"""
+    # Добавляем уникальный идентификатор для каждого сообщения
+    if 'message_display_counter' not in st.session_state:
+        st.session_state.message_display_counter = 0
+    st.session_state.message_display_counter += 1
+    
+    # Создаем уникальный ключ для кнопки, используя счетчик
     if button_key is None:
-        button_key = f"translate_{message_hash}_{role}"
+        button_key = f"translate_{message_hash}_{role}_{st.session_state.message_display_counter}"
     
     translation_key = f"translation_{message_hash}"
     content = message.get("content", "")
@@ -76,7 +82,6 @@ def display_message_with_translation(message, message_hash, avatar, role, button
                     "original_text": content
                 }
             elif "original_text" not in st.session_state[translation_key]:
-                # Обновляем существующее состояние
                 st.session_state[translation_key].update({
                     "original_text": content
                 })
@@ -92,18 +97,18 @@ def display_message_with_translation(message, message_hash, avatar, role, button
                 message_placeholder.markdown(content)
         
         with cols[1]:
-            # Кнопка перевода с динамической подсказкой
+            # Кнопка перевода с динамической подсказкой и уникальным ключом
             try:
                 detected_lang = translator.detect(content).lang
                 tooltip = "Перевести на английский" if detected_lang == 'ru' else "Перевести на русский"
             except:
                 tooltip = "Перевести"
                 
-            if st.button("🔄", key=button_key, help=tooltip):
+            translate_button_key = f"{button_key}_translate_{st.session_state.message_display_counter}"
+            if st.button("🔄", key=translate_button_key, help=tooltip):
                 current_state = st.session_state[translation_key]
                 current_state["is_translated"] = not current_state["is_translated"]
                 
-                # Если переключаемся на перевод и перевод еще не сделан
                 if current_state["is_translated"] and current_state["translated_text"] is None:
                     current_state["translated_text"] = translate_text(content)
                 
@@ -113,8 +118,9 @@ def display_message_with_translation(message, message_hash, avatar, role, button
                 )
         
         with cols[2]:
-            # Кнопка удаления
-            if st.button("🗑", key=f"delete_{message_hash}", help="Удалить сообщение"):
+            # Кнопка удаления с уникальным ключом
+            delete_button_key = f"delete_{message_hash}_{st.session_state.message_display_counter}"
+            if st.button("🗑", key=delete_button_key, help="Удалить сообщение"):
                 return True
     
     return False 

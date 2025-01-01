@@ -69,42 +69,31 @@ def display_message(message, role):
     message_hash = get_message_hash(role, message["content"])
     avatar = assistant_avatar if role == "assistant" else get_user_profile_image(st.session_state.username)
     
-    # Добавляем уникальный идентификатор для каждого сообщения в текущем чате
-    chat_id = st.session_state.current_chat_flow['id']
-    message_key = f"{chat_id}_{message_hash}"
+    # Закомментируем нумерацию сообщений
+    # if 'message_counter' not in st.session_state:
+    #     st.session_state.message_counter = 1
+    # else:
+    #     st.session_state.message_counter += 1
     
-    if 'message_ids' not in st.session_state:
-        st.session_state.message_ids = {}
+    # Закомментируем добавление номера в контент
+    # message_with_number = {
+    #     "role": message["role"],
+    #     "content": f"{message['content']}\n\n*Сообщение #{st.session_state.message_counter}*"
+    # }
     
-    if message_key not in st.session_state.message_ids:
-        st.session_state.message_ids[message_key] = len(st.session_state.message_ids)
-    
-    # Добавляем номер сообщения
-    if 'message_counter' not in st.session_state:
-        st.session_state.message_counter = 1
-    else:
-        st.session_state.message_counter += 1
-    
-    # Добавляем номер сообщения в конец контента
-    message_with_number = {
-        "role": message["role"],
-        "content": f"{message['content']}\n\n*Сообщение #{st.session_state.message_counter}*"
-    }
-    
-    # Создаем уникальный ключ для кнопки перевода
-    button_key = f"translate_{message_key}_{st.session_state.message_ids[message_key]}_{role}"
-    
-    # Используем функцию из utils.translation с пронумерованным сообщением
-    if display_message_with_translation(message_with_number, message_hash, avatar, role, button_key):
-        current_chat_db = ChatDatabase(f"{st.session_state.username}_{st.session_state.current_chat_flow['id']}")
-        current_chat_db.delete_message(message_hash)
-        if "message_hashes" in st.session_state:
-            if message_hash in st.session_state.message_hashes:
-                st.session_state.message_hashes.remove(message_hash)
-            translation_key = f"translation_{message_hash}"
-            if translation_key in st.session_state:
-                del st.session_state[translation_key]
-        st.rerun()
+    # Отображаем сообщение с кнопкой удаления
+    with st.chat_message(role, avatar=avatar):
+        cols = st.columns([0.95, 0.05])
+        with cols[0]:
+            st.markdown(message["content"])
+        with cols[1]:
+            if st.button("🗑", key=f"delete_{message_hash}", help="Удалить сообщение"):
+                current_chat_db = ChatDatabase(f"{st.session_state.username}_{st.session_state.current_chat_flow['id']}")
+                current_chat_db.delete_message(message_hash)
+                if "message_hashes" in st.session_state:
+                    if message_hash in st.session_state.message_hashes:
+                        st.session_state.message_hashes.remove(message_hash)
+                st.rerun()
 
 # Функция для сохранения нового чат-потока
 def save_chat_flow(username, flow_id, flow_name=None):
@@ -523,11 +512,22 @@ def submit_message(user_input):
             response_data = response.json()
 
             if response_data and isinstance(response_data, dict) and 'text' in response_data:
-                assistant_response = response_data['text'].strip()  # Берем только текст и убираем лишние пробелы
+                assistant_response = response_data['text'].strip()
+                
+                # Добавляем проверку языка и перевод
+                try:
+                    translator = Translator()
+                    detected_lang = translator.detect(assistant_response).lang
+                    
+                    # Если ответ не на русском, переводим его
+                    if detected_lang != 'ru':
+                        translated_response = translator.translate(assistant_response, dest='ru')
+                        assistant_response = translated_response.text
+                except Exception as e:
+                    st.error(f"Ошибка при переводе: {str(e)}")
                 
                 # Проверяем, что ответ не пустой
                 if assistant_response:
-                    # Сохраняем ТОЛЬКО текст ответа
                     current_chat_db.add_message("assistant", assistant_response)
                     display_message({
                         "role": "assistant", 
