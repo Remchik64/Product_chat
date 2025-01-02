@@ -23,9 +23,9 @@ st.sidebar.title("Настройки модели")
 # Выбор модели
 if "model_settings" not in st.session_state:
     st.session_state.model_settings = {
-        "model": "google/gemini-2.0-flash-exp:free",
+        "model": "google/gemini-flash-1.5-exp",
         "max_tokens": 512,
-        "temperature": 0.2,
+        "temperature": 0.5,
         "top_p": 0.9,
         "top_k": 50,
         "repetition_penalty": 1.1
