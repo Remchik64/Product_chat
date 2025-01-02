@@ -23,7 +23,7 @@ st.sidebar.title("Настройки модели")
 # Выбор модели
 if "model_settings" not in st.session_state:
     st.session_state.model_settings = {
-        "model": "google/gemini-flash-1.5",
+        "model": "google/gemini-2.0-flash-exp:free",
         "max_tokens": 512,
         "temperature": 0.2,
         "top_p": 0.9,
@@ -36,6 +36,7 @@ model = st.sidebar.selectbox(
     [
         "mistralai/ministral-8b",
         "google/gemini-flash-1.5-exp",
+        "google/gemini-2.0-flash-exp:free",
     ],
     index=0,
     key="model_select"
